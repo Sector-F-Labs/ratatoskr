@@ -220,4 +220,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📃 License
 
-This project is licensed under the GNU General Public License v2.0 (GPL-2.0) - see the LICENSE.md file for details.
+This project is licensed under the BSD 3-Clause License - see the LICENSE.md file for details.

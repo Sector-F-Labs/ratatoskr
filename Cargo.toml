@@ -2,6 +2,7 @@
 name = "ratatoskr"
 version = "0.1.0"
 edition = "2024"
+license = "BSD-3-Clause"
 
 [dependencies]
 teloxide = { version = "0.15", features = ["macros"] }
