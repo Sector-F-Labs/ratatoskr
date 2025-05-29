@@ -2,6 +2,7 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 use std::error::Error;
 use std::sync::Arc;
 use teloxide::prelude::{Bot, CallbackQuery, Message, Requester};
+use teloxide::types::MessageReactionUpdated;
 use crate::utils::{
     download_file, select_best_photo, file_info_from_photo, file_info_from_audio, 
     file_info_from_voice, file_info_from_video, file_info_from_video_note, 
@@ -9,6 +10,7 @@ use crate::utils::{
 };
 use crate::structs::{KafkaInTopic, ImageStorageDir};
 use crate::incoming::{FileInfo, IncomingMessage};
+
 
 pub async fn message_handler(
     bot: Bot,
@@ -271,6 +273,84 @@ pub async fn message_handler(
         tracing::error!(topic = %kafka_in_topic.0, key = "message", message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to send message to Kafka");
         return Err(Box::new(e));
     }
+    Ok(())
+}
+
+pub async fn message_reaction_handler(
+    _bot: Bot,
+    reaction: MessageReactionUpdated,
+    producer: Arc<FutureProducer>,
+    kafka_in_topic: KafkaInTopic,
+    _image_storage_dir: ImageStorageDir,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let chat_id = reaction.chat.id.0;
+    let message_id = reaction.message_id.0;
+    let user_id = reaction.actor.user().map(|u| u.id.0);
+    let date = reaction.date;
+    
+    // Convert reaction types to strings
+    let old_reaction: Vec<String> = reaction.old_reaction.iter()
+        .map(|r| match r {
+            teloxide::types::ReactionType::Emoji { emoji } => emoji.clone(),
+            teloxide::types::ReactionType::CustomEmoji { custom_emoji_id } => format!("custom:{}", custom_emoji_id),
+            teloxide::types::ReactionType::Paid => "paid".to_string(),
+        })
+        .collect();
+        
+    let new_reaction: Vec<String> = reaction.new_reaction.iter()
+        .map(|r| match r {
+            teloxide::types::ReactionType::Emoji { emoji } => emoji.clone(),
+            teloxide::types::ReactionType::CustomEmoji { custom_emoji_id } => format!("custom:{}", custom_emoji_id),
+            teloxide::types::ReactionType::Paid => "paid".to_string(),
+        })
+        .collect();
+
+    tracing::info!(
+        chat_id = %chat_id,
+        message_id = %message_id,
+        user_id = ?user_id,
+        old_reactions = ?old_reaction,
+        new_reactions = ?new_reaction,
+        "Processing message reaction"
+    );
+
+    let incoming_msg = IncomingMessage::new_message_reaction(
+        chat_id,
+        message_id,
+        user_id,
+        date,
+        old_reaction,
+        new_reaction,
+        None, // bot_id - could be retrieved from bot.get_me() if needed
+        None, // bot_username - could be retrieved from bot.get_me() if needed
+    );
+
+    let json = match serde_json::to_string(&incoming_msg) {
+        Ok(json_string) => json_string,
+        Err(e) => {
+            tracing::error!(chat_id = %chat_id, message_id = %message_id, error = %e, "Failed to serialize message reaction to JSON");
+            return Err(Box::new(e));
+        }
+    };
+
+    tracing::info!(
+        topic = %kafka_in_topic.0,
+        key = "message_reaction",
+        chat_id = %chat_id,
+        message_id = %message_id,
+        user_id = ?user_id,
+        "Sending message reaction to Kafka"
+    );
+    
+    let record = FutureRecord::to(kafka_in_topic.0.as_str())
+        .payload(&json)
+        .key("message_reaction");
+
+    if let Err((e, _)) = producer.send(record, None).await {
+        tracing::error!(topic = %kafka_in_topic.0, key = "message_reaction", chat_id = %chat_id, message_id = %message_id, error = %e, "Failed to send message reaction to Kafka");
+        return Err(Box::new(e));
+    }
+
     Ok(())
 }
 

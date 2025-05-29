@@ -94,6 +94,31 @@ Button click events from inline keyboards
 }
 ```
 
+#### 3. MessageReaction
+Emoji reactions that users add to or remove from messages
+
+```json
+{
+  "message_type": {
+    "type": "MessageReaction",
+    "data": {
+      "chat_id": 123456789,
+      "message_id": 54321,
+      "user_id": 987654321,
+      "date": "2023-12-01T10:30:00Z",
+      "old_reaction": ["👍"],
+      "new_reaction": ["👍", "❤️"]
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "source": {
+    "platform": "telegram",
+    "bot_id": null,
+    "bot_username": null
+  }
+}
+```
+
 ## Outgoing Messages (`KAFKA_OUT_TOPIC`)
 
 All messages to Telegram are wrapped in the `OutgoingMessage` type:

@@ -16,7 +16,7 @@ mod incoming;
 mod outgoing;
 
 mod telegram_handlers;
-use telegram_handlers::*;
+use telegram_handlers::{message_handler, callback_query_handler, message_reaction_handler};
 
 mod utils;
 
@@ -111,7 +111,8 @@ async fn main() {
 
     let handler = dptree::entry()
         .branch(Update::filter_message().endpoint(message_handler))
-        .branch(Update::filter_callback_query().endpoint(callback_query_handler));
+        .branch(Update::filter_callback_query().endpoint(callback_query_handler))
+        .branch(Update::filter_message_reaction_updated().endpoint(message_reaction_handler));
 
     Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![producer, kafka_in_topic, image_storage_dir])

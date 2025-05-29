@@ -15,6 +15,7 @@ pub struct IncomingMessage {
 pub enum IncomingMessageType {
     TelegramMessage(TelegramMessageData),
     CallbackQuery(CallbackQueryData),
+    MessageReaction(MessageReactionData),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -30,6 +31,16 @@ pub struct CallbackQueryData {
     pub message_id: i32,
     pub callback_data: String,
     pub callback_query_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MessageReactionData {
+    pub chat_id: i64,
+    pub message_id: i32,
+    pub user_id: Option<u64>, // None if anonymous
+    pub date: DateTime<Utc>,
+    pub old_reaction: Vec<String>, // emoji strings
+    pub new_reaction: Vec<String>, // emoji strings
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -133,6 +144,34 @@ impl IncomingMessage {
                 message_id,
                 callback_data,
                 callback_query_id,
+            }),
+            timestamp: Utc::now(),
+            source: MessageSource {
+                platform: "telegram".to_string(),
+                bot_id,
+                bot_username,
+            },
+        }
+    }
+
+    pub fn new_message_reaction(
+        chat_id: i64,
+        message_id: i32,
+        user_id: Option<u64>,
+        date: DateTime<Utc>,
+        old_reaction: Vec<String>,
+        new_reaction: Vec<String>,
+        bot_id: Option<u64>,
+        bot_username: Option<String>,
+    ) -> Self {
+        Self {
+            message_type: IncomingMessageType::MessageReaction(MessageReactionData {
+                chat_id,
+                message_id,
+                user_id,
+                date,
+                old_reaction,
+                new_reaction,
             }),
             timestamp: Utc::now(),
             source: MessageSource {
