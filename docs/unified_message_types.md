@@ -27,7 +27,7 @@ All messages from Telegram are wrapped in the `IncomingMessage` type:
           "width": 1920,
           "height": 1080,
           "file_size": 245760,
-          "local_path": "./images/-123456789_42_abc123def456_1703123456.jpg"
+          "local_path": "/absolute/path/to/images/-123456789_42_abc123def456_1703123456.jpg"
         }
       ]
     }
@@ -281,7 +281,7 @@ This will be automatically converted to the new `OutgoingMessage` format interna
   "width": 1920,
   "height": 1080,
   "file_size": 245760,
-  "local_path": "./images/downloaded_image.jpg"
+  "local_path": "/absolute/path/to/images/downloaded_image.jpg"
 }
 ```
 

@@ -67,9 +67,13 @@ pub async fn download_image(
     file_handle.write_all(&content).await?;
     file_handle.flush().await?;
 
+    // Get absolute path for applications to use
+    let absolute_path = local_path.canonicalize()
+        .map_err(|e| format!("Failed to get absolute path: {}", e))?;
+
     tracing::info!(
         file_id = %photo.file.id,
-        local_path = %local_path.display(),
+        local_path = %absolute_path.display(),
         file_size = %content.len(),
         "Image downloaded successfully"
     );
@@ -80,7 +84,7 @@ pub async fn download_image(
         width: photo.width,
         height: photo.height,
         file_size: photo.file.size,
-        local_path: local_path.to_string_lossy().to_string(),
+        local_path: absolute_path.to_string_lossy().to_string(),
     })
 }
 

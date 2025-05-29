@@ -31,7 +31,7 @@ Images are stored with the following naming convention:
 
 Example:
 ```
--123456789_42_AgACAgIAAxkDAAIC_mF_abc123def456_1703123456.jpg
+/absolute/path/to/images/-123456789_42_AgACAgIAAxkDAAIC_mF_abc123def456_1703123456.jpg
 ```
 
 ## Image Selection Logic
@@ -39,6 +39,10 @@ Example:
 When a message contains multiple photo sizes (Telegram provides multiple resolutions), Ratatoskr selects the highest quality image based on:
 1. Image dimensions (width × height)
 2. The largest dimension combination is chosen
+
+## File Path Handling
+
+All downloaded images are stored with **absolute file paths** in the Kafka message metadata. This ensures that consuming applications can reliably access the files regardless of their working directory. The `local_path` field in the `ImageInfo` structure will always contain the full system path to the downloaded image file.
 
 ## Kafka Message Enhancement
 
@@ -54,7 +58,7 @@ When an image is downloaded, the original Telegram message sent to Kafka is enha
       "width": 1920,
       "height": 1080,
       "file_size": 245760,
-      "local_path": "./images/-123456789_42_AgACAgIAAxkDAAIC_mF_abc123def456_1703123456.jpg"
+      "local_path": "/absolute/path/to/images/-123456789_42_AgACAgIAAxkDAAIC_mF_abc123def456_1703123456.jpg"
     }
   ]
 }
@@ -115,6 +119,7 @@ The file extension is preserved from the original Telegram file path.
 - File paths are sanitized to prevent directory traversal
 - Only authenticated bot tokens can access files
 - Local file permissions follow system defaults
+- **Image paths are returned as absolute paths** to prevent path resolution issues and ensure consuming applications can reliably locate files
 
 ## Example Usage
 
@@ -128,7 +133,7 @@ export IMAGE_STORAGE_DIR="/var/ratatoskr/images"
 3. Check the logs for download confirmation:
 ```
 INFO ratatoskr::telegram_handlers: Downloading image from Telegram message message_id=123 chat_id=-456 file_id="AgACAgIAAxk..."
-INFO ratatoskr::utils: Image downloaded successfully file_id="AgACAgIAAxk..." local_path="/var/ratatoskr/images/-456_123_abc123_1703123456.jpg"
+INFO ratatoskr::utils: Image downloaded successfully file_id="AgACAgIAAxk..." local_path="/absolute/path/to/var/ratatoskr/images/-456_123_abc123_1703123456.jpg"
 ```
 
 4. The enhanced message appears in your Kafka topic with image metadata

@@ -67,7 +67,7 @@ Send a locally stored image with a caption and interactive buttons:
   "message_type": {
     "type": "ImageMessage",
     "data": {
-      "image_path": "/var/ratatoskr/images/product_photo.jpg",
+      "image_path": "/absolute/path/to/var/ratatoskr/images/product_photo.jpg",
       "caption": "🌟 Featured Product: Premium Wireless Headphones\n\n✅ Noise cancellation\n✅ 30-hour battery life\n✅ Free shipping\n\n💸 Special price: $99.99",
       "buttons": [
         [
@@ -98,7 +98,7 @@ Send a PDF report or document file:
   "message_type": {
     "type": "DocumentMessage",
     "data": {
-      "document_path": "/var/ratatoskr/reports/monthly_report_nov_2023.pdf",
+      "document_path": "/absolute/path/to/var/ratatoskr/reports/monthly_report_nov_2023.pdf",
       "filename": "Monthly_Report_November_2023.pdf",
       "caption": "📊 Your monthly analytics report is ready!\n\nThis report includes:\n• User engagement metrics\n• Revenue summary\n• Growth analysis",
       "buttons": [
@@ -220,7 +220,7 @@ Here's what you receive when a user sends a message with an image:
           "width": 1280,
           "height": 960,
           "file_size": 89032,
-          "local_path": "./images/123456789_156_AQADyBUAAhoFqFN-_1701432600.jpg"
+          "local_path": "/absolute/path/to/images/123456789_156_AQADyBUAAhoFqFN-_1701432600.jpg"
         }
       ]
     }
@@ -372,5 +372,7 @@ When something goes wrong, provide helpful feedback:
 7. **Keep message IDs**: Store message IDs when you need to edit or delete messages later
 
 8. **Validate file existence**: Check that files exist before sending ImageMessage or DocumentMessage
+
+9. **Use absolute paths**: All file paths in messages are absolute paths for easy access by consuming applications
 
 These examples should help you implement common Telegram bot interactions using Ratatoskr's unified message types.
