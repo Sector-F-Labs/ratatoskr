@@ -10,7 +10,7 @@ use teloxide::{dptree, prelude::*};
 use tracing_subscriber::{EnvFilter, fmt};
 
 mod structs;
-use structs::{KafkaInTopic, ImageStorageDir};
+use structs::{ImageStorageDir, KafkaInTopic};
 
 mod telegram_handlers;
 use telegram_handlers::*;
@@ -58,7 +58,7 @@ async fn main() {
 
     let image_storage_dir = env::var("IMAGE_STORAGE_DIR").unwrap_or_else(|_| {
         tracing::info!("IMAGE_STORAGE_DIR not set, defaulting to ./images");
-        "./images/in".to_string()
+        "./files/in".to_string()
     });
     let image_storage_dir = ImageStorageDir(image_storage_dir.clone());
     tracing::info!(image_storage_dir = %image_storage_dir.0, "Using image storage directory");
