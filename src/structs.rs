@@ -27,7 +27,7 @@ pub enum IncomingMessageType {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelegramMessageData {
     pub message: TelegramMessage,
-    pub downloaded_images: Vec<ImageInfo>,
+    pub downloaded_files: Vec<FileInfo>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -59,7 +59,13 @@ pub struct OutgoingMessage {
 pub enum OutgoingMessageType {
     TextMessage(TextMessageData),
     ImageMessage(ImageMessageData),
+    AudioMessage(AudioMessageData),
+    VoiceMessage(VoiceMessageData),
+    VideoMessage(VideoMessageData),
+    VideoNoteMessage(VideoNoteMessageData),
     DocumentMessage(DocumentMessageData),
+    StickerMessage(StickerMessageData),
+    AnimationMessage(AnimationMessageData),
     EditMessage(EditMessageData),
     DeleteMessage(DeleteMessageData),
 }
@@ -76,6 +82,60 @@ pub struct TextMessageData {
 pub struct ImageMessageData {
     pub image_path: String,
     pub caption: Option<String>,
+    pub buttons: Option<Vec<Vec<ButtonInfo>>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AudioMessageData {
+    pub audio_path: String,
+    pub caption: Option<String>,
+    pub duration: Option<u32>,
+    pub performer: Option<String>,
+    pub title: Option<String>,
+    pub buttons: Option<Vec<Vec<ButtonInfo>>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VoiceMessageData {
+    pub voice_path: String,
+    pub caption: Option<String>,
+    pub duration: Option<u32>,
+    pub buttons: Option<Vec<Vec<ButtonInfo>>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VideoMessageData {
+    pub video_path: String,
+    pub caption: Option<String>,
+    pub duration: Option<u32>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub supports_streaming: Option<bool>,
+    pub buttons: Option<Vec<Vec<ButtonInfo>>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VideoNoteMessageData {
+    pub video_note_path: String,
+    pub duration: Option<u32>,
+    pub length: Option<u32>,
+    pub buttons: Option<Vec<Vec<ButtonInfo>>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StickerMessageData {
+    pub sticker_path: String,
+    pub emoji: Option<String>,
+    pub buttons: Option<Vec<Vec<ButtonInfo>>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AnimationMessageData {
+    pub animation_path: String,
+    pub caption: Option<String>,
+    pub duration: Option<u32>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
     pub buttons: Option<Vec<Vec<ButtonInfo>>>,
 }
 
@@ -113,6 +173,42 @@ pub struct ButtonInfo {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FileInfo {
+    pub file_id: String,
+    pub file_unique_id: String,
+    pub file_type: FileType,
+    pub file_size: u32,
+    pub local_path: String,
+    pub metadata: FileMetadata,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum FileType {
+    Photo,
+    Audio,
+    Voice,
+    Video,
+    VideoNote,
+    Document,
+    Sticker,
+    Animation,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum FileMetadata {
+    Photo { width: u32, height: u32 },
+    Audio { duration: u32, performer: Option<String>, title: Option<String> },
+    Voice { duration: u32 },
+    Video { width: u32, height: u32, duration: u32 },
+    VideoNote { length: u32, duration: u32 },
+    Document { file_name: Option<String>, mime_type: Option<String> },
+    Sticker { width: u32, height: u32, emoji: Option<String> },
+    Animation { width: u32, height: u32, duration: u32 },
+}
+
+// Legacy compatibility - deprecated
+#[deprecated(note = "Use FileInfo instead")]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ImageInfo {
     pub file_id: String,
     pub file_unique_id: String,
@@ -145,14 +241,14 @@ pub struct OutgoingKafkaMessage {
 impl IncomingMessage {
     pub fn new_telegram_message(
         message: TelegramMessage,
-        downloaded_images: Vec<ImageInfo>,
+        downloaded_files: Vec<FileInfo>,
         bot_id: Option<u64>,
         bot_username: Option<String>,
     ) -> Self {
         Self {
             message_type: IncomingMessageType::TelegramMessage(TelegramMessageData {
                 message,
-                downloaded_images,
+                downloaded_files,
             }),
             timestamp: Utc::now(),
             source: MessageSource {
@@ -222,6 +318,156 @@ impl OutgoingMessage {
             message_type: OutgoingMessageType::ImageMessage(ImageMessageData {
                 image_path,
                 caption,
+                buttons,
+            }),
+            timestamp: Utc::now(),
+            target: MessageTarget {
+                platform: "telegram".to_string(),
+                chat_id,
+                thread_id: None,
+            },
+        }
+    }
+
+    pub fn new_audio_message(
+        chat_id: i64,
+        audio_path: String,
+        caption: Option<String>,
+        duration: Option<u32>,
+        performer: Option<String>,
+        title: Option<String>,
+        buttons: Option<Vec<Vec<ButtonInfo>>>,
+    ) -> Self {
+        Self {
+            message_type: OutgoingMessageType::AudioMessage(AudioMessageData {
+                audio_path,
+                caption,
+                duration,
+                performer,
+                title,
+                buttons,
+            }),
+            timestamp: Utc::now(),
+            target: MessageTarget {
+                platform: "telegram".to_string(),
+                chat_id,
+                thread_id: None,
+            },
+        }
+    }
+
+    pub fn new_voice_message(
+        chat_id: i64,
+        voice_path: String,
+        caption: Option<String>,
+        duration: Option<u32>,
+        buttons: Option<Vec<Vec<ButtonInfo>>>,
+    ) -> Self {
+        Self {
+            message_type: OutgoingMessageType::VoiceMessage(VoiceMessageData {
+                voice_path,
+                caption,
+                duration,
+                buttons,
+            }),
+            timestamp: Utc::now(),
+            target: MessageTarget {
+                platform: "telegram".to_string(),
+                chat_id,
+                thread_id: None,
+            },
+        }
+    }
+
+    pub fn new_video_message(
+        chat_id: i64,
+        video_path: String,
+        caption: Option<String>,
+        duration: Option<u32>,
+        width: Option<u32>,
+        height: Option<u32>,
+        supports_streaming: Option<bool>,
+        buttons: Option<Vec<Vec<ButtonInfo>>>,
+    ) -> Self {
+        Self {
+            message_type: OutgoingMessageType::VideoMessage(VideoMessageData {
+                video_path,
+                caption,
+                duration,
+                width,
+                height,
+                supports_streaming,
+                buttons,
+            }),
+            timestamp: Utc::now(),
+            target: MessageTarget {
+                platform: "telegram".to_string(),
+                chat_id,
+                thread_id: None,
+            },
+        }
+    }
+
+    pub fn new_video_note_message(
+        chat_id: i64,
+        video_note_path: String,
+        duration: Option<u32>,
+        length: Option<u32>,
+        buttons: Option<Vec<Vec<ButtonInfo>>>,
+    ) -> Self {
+        Self {
+            message_type: OutgoingMessageType::VideoNoteMessage(VideoNoteMessageData {
+                video_note_path,
+                duration,
+                length,
+                buttons,
+            }),
+            timestamp: Utc::now(),
+            target: MessageTarget {
+                platform: "telegram".to_string(),
+                chat_id,
+                thread_id: None,
+            },
+        }
+    }
+
+    pub fn new_sticker_message(
+        chat_id: i64,
+        sticker_path: String,
+        emoji: Option<String>,
+        buttons: Option<Vec<Vec<ButtonInfo>>>,
+    ) -> Self {
+        Self {
+            message_type: OutgoingMessageType::StickerMessage(StickerMessageData {
+                sticker_path,
+                emoji,
+                buttons,
+            }),
+            timestamp: Utc::now(),
+            target: MessageTarget {
+                platform: "telegram".to_string(),
+                chat_id,
+                thread_id: None,
+            },
+        }
+    }
+
+    pub fn new_animation_message(
+        chat_id: i64,
+        animation_path: String,
+        caption: Option<String>,
+        duration: Option<u32>,
+        width: Option<u32>,
+        height: Option<u32>,
+        buttons: Option<Vec<Vec<ButtonInfo>>>,
+    ) -> Self {
+        Self {
+            message_type: OutgoingMessageType::AnimationMessage(AnimationMessageData {
+                animation_path,
+                caption,
+                duration,
+                width,
+                height,
                 buttons,
             }),
             timestamp: Utc::now(),

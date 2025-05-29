@@ -2,8 +2,12 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 use std::error::Error;
 use std::sync::Arc;
 use teloxide::prelude::{Bot, CallbackQuery, Message, Requester};
-use crate::utils::{download_image, select_best_photo};
-use crate::structs::{ImageInfo, IncomingMessage, KafkaInTopic, ImageStorageDir};
+use crate::utils::{
+    download_file, select_best_photo, file_info_from_photo, file_info_from_audio, 
+    file_info_from_voice, file_info_from_video, file_info_from_video_note, 
+    file_info_from_document, file_info_from_sticker, file_info_from_animation
+};
+use crate::structs::{FileInfo, IncomingMessage, KafkaInTopic, ImageStorageDir};
 
 pub async fn message_handler(
     bot: Bot,
@@ -12,39 +16,223 @@ pub async fn message_handler(
     kafka_in_topic: KafkaInTopic,
     image_storage_dir: ImageStorageDir,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    // Handle image download if message contains photos
-    let mut downloaded_images: Vec<ImageInfo> = Vec::new();
+    // Handle file downloads for all supported file types
+    let mut downloaded_files: Vec<FileInfo> = Vec::new();
+    
+    // Handle photos
     if let Some(photos) = msg.photo() {
         if let Some(best_photo) = select_best_photo(photos) {
+            let (file, file_type, metadata) = file_info_from_photo(best_photo);
             tracing::info!(
                 message_id = %msg.id.0, 
                 chat_id = %msg.chat.id.0, 
-                file_id = %best_photo.file.id,
-                width = %best_photo.width,
-                height = %best_photo.height,
-                "Downloading image from Telegram message"
+                file_id = %file.id,
+                file_type = "photo",
+                "Downloading file from Telegram message"
             );
             
-            match download_image(&bot, best_photo, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
-                Ok(image_info) => {
-                    tracing::info!(
-                        message_id = %msg.id.0,
-                        chat_id = %msg.chat.id.0,
-                        local_path = %image_info.local_path,
-                        "Image downloaded successfully"
-                    );
-                    downloaded_images.push(image_info);
+            match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+                Ok(file_info) => {
+                    downloaded_files.push(file_info);
                 }
                 Err(e) => {
                     tracing::error!(
                         message_id = %msg.id.0,
                         chat_id = %msg.chat.id.0,
-                        file_id = %best_photo.file.id,
+                        file_id = %file.id,
                         error = %e,
-                        "Failed to download image"
+                        "Failed to download photo"
                     );
-                    // Continue processing even if image download fails
                 }
+            }
+        }
+    }
+    
+    // Handle audio
+    if let Some(audio) = &msg.audio() {
+        let (file, file_type, metadata) = file_info_from_audio(audio);
+        tracing::info!(
+            message_id = %msg.id.0, 
+            chat_id = %msg.chat.id.0, 
+            file_id = %file.id,
+            file_type = "audio",
+            "Downloading file from Telegram message"
+        );
+        
+        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+            Ok(file_info) => {
+                downloaded_files.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to download audio"
+                );
+            }
+        }
+    }
+    
+    // Handle voice
+    if let Some(voice) = &msg.voice() {
+        let (file, file_type, metadata) = file_info_from_voice(voice);
+        tracing::info!(
+            message_id = %msg.id.0, 
+            chat_id = %msg.chat.id.0, 
+            file_id = %file.id,
+            file_type = "voice",
+            "Downloading file from Telegram message"
+        );
+        
+        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+            Ok(file_info) => {
+                downloaded_files.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to download voice"
+                );
+            }
+        }
+    }
+    
+    // Handle video
+    if let Some(video) = &msg.video() {
+        let (file, file_type, metadata) = file_info_from_video(video);
+        tracing::info!(
+            message_id = %msg.id.0, 
+            chat_id = %msg.chat.id.0, 
+            file_id = %file.id,
+            file_type = "video",
+            "Downloading file from Telegram message"
+        );
+        
+        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+            Ok(file_info) => {
+                downloaded_files.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to download video"
+                );
+            }
+        }
+    }
+    
+    // Handle video note
+    if let Some(video_note) = &msg.video_note() {
+        let (file, file_type, metadata) = file_info_from_video_note(video_note);
+        tracing::info!(
+            message_id = %msg.id.0, 
+            chat_id = %msg.chat.id.0, 
+            file_id = %file.id,
+            file_type = "video_note",
+            "Downloading file from Telegram message"
+        );
+        
+        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+            Ok(file_info) => {
+                downloaded_files.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to download video note"
+                );
+            }
+        }
+    }
+    
+    // Handle document
+    if let Some(document) = &msg.document() {
+        let (file, file_type, metadata) = file_info_from_document(document);
+        tracing::info!(
+            message_id = %msg.id.0, 
+            chat_id = %msg.chat.id.0, 
+            file_id = %file.id,
+            file_type = "document",
+            "Downloading file from Telegram message"
+        );
+        
+        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+            Ok(file_info) => {
+                downloaded_files.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to download document"
+                );
+            }
+        }
+    }
+    
+    // Handle sticker
+    if let Some(sticker) = &msg.sticker() {
+        let (file, file_type, metadata) = file_info_from_sticker(sticker);
+        tracing::info!(
+            message_id = %msg.id.0, 
+            chat_id = %msg.chat.id.0, 
+            file_id = %file.id,
+            file_type = "sticker",
+            "Downloading file from Telegram message"
+        );
+        
+        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+            Ok(file_info) => {
+                downloaded_files.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to download sticker"
+                );
+            }
+        }
+    }
+    
+    // Handle animation
+    if let Some(animation) = &msg.animation() {
+        let (file, file_type, metadata) = file_info_from_animation(animation);
+        tracing::info!(
+            message_id = %msg.id.0, 
+            chat_id = %msg.chat.id.0, 
+            file_id = %file.id,
+            file_type = "animation",
+            "Downloading file from Telegram message"
+        );
+        
+        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+            Ok(file_info) => {
+                downloaded_files.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to download animation"
+                );
             }
         }
     }
@@ -52,7 +240,7 @@ pub async fn message_handler(
     // Create unified incoming message
     let incoming_msg = IncomingMessage::new_telegram_message(
         msg.clone(),
-        downloaded_images.clone(),
+        downloaded_files.clone(),
         None, // bot_id - could be retrieved from bot.get_me() if needed
         None, // bot_username - could be retrieved from bot.get_me() if needed
     );
@@ -70,8 +258,8 @@ pub async fn message_handler(
         key = "message", 
         message_id = %msg.id.0, 
         chat_id = %msg.chat.id.0, 
-        has_images = %(!downloaded_images.is_empty()),
-        image_count = %downloaded_images.len(),
+        has_files = %(!downloaded_files.is_empty()),
+        file_count = %downloaded_files.len(),
         "Sending Telegram message to Kafka"
     );
     let record = FutureRecord::to(kafka_in_topic.0.as_str())

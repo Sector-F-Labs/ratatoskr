@@ -100,6 +100,72 @@ async fn handle_outgoing_message(
             bot.send_photo(chat_id, input_file).await?;
         }
         
+        OutgoingMessageType::AudioMessage(data) => {
+            tracing::info!(%chat_id, audio_path = %data.audio_path, has_caption = %data.caption.is_some(), "Sending audio message to Telegram");
+            
+            if !Path::new(&data.audio_path).exists() {
+                return Err(format!("Audio file not found: {}", data.audio_path).into());
+            }
+            
+            let input_file = InputFile::file(&data.audio_path);
+            bot.send_audio(chat_id, input_file).await?;
+        }
+        
+        OutgoingMessageType::VoiceMessage(data) => {
+            tracing::info!(%chat_id, voice_path = %data.voice_path, has_caption = %data.caption.is_some(), "Sending voice message to Telegram");
+            
+            if !Path::new(&data.voice_path).exists() {
+                return Err(format!("Voice file not found: {}", data.voice_path).into());
+            }
+            
+            let input_file = InputFile::file(&data.voice_path);
+            bot.send_voice(chat_id, input_file).await?;
+        }
+        
+        OutgoingMessageType::VideoMessage(data) => {
+            tracing::info!(%chat_id, video_path = %data.video_path, has_caption = %data.caption.is_some(), "Sending video message to Telegram");
+            
+            if !Path::new(&data.video_path).exists() {
+                return Err(format!("Video file not found: {}", data.video_path).into());
+            }
+            
+            let input_file = InputFile::file(&data.video_path);
+            bot.send_video(chat_id, input_file).await?;
+        }
+        
+        OutgoingMessageType::VideoNoteMessage(data) => {
+            tracing::info!(%chat_id, video_note_path = %data.video_note_path, "Sending video note message to Telegram");
+            
+            if !Path::new(&data.video_note_path).exists() {
+                return Err(format!("Video note file not found: {}", data.video_note_path).into());
+            }
+            
+            let input_file = InputFile::file(&data.video_note_path);
+            bot.send_video_note(chat_id, input_file).await?;
+        }
+        
+        OutgoingMessageType::StickerMessage(data) => {
+            tracing::info!(%chat_id, sticker_path = %data.sticker_path, "Sending sticker message to Telegram");
+            
+            if !Path::new(&data.sticker_path).exists() {
+                return Err(format!("Sticker file not found: {}", data.sticker_path).into());
+            }
+            
+            let input_file = InputFile::file(&data.sticker_path);
+            bot.send_sticker(chat_id, input_file).await?;
+        }
+        
+        OutgoingMessageType::AnimationMessage(data) => {
+            tracing::info!(%chat_id, animation_path = %data.animation_path, has_caption = %data.caption.is_some(), "Sending animation message to Telegram");
+            
+            if !Path::new(&data.animation_path).exists() {
+                return Err(format!("Animation file not found: {}", data.animation_path).into());
+            }
+            
+            let input_file = InputFile::file(&data.animation_path);
+            bot.send_animation(chat_id, input_file).await?;
+        }
+        
         OutgoingMessageType::DocumentMessage(data) => {
             tracing::info!(%chat_id, document_path = %data.document_path, has_caption = %data.caption.is_some(), "Sending document message to Telegram");
             
