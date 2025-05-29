@@ -13,6 +13,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio-stream = "0.1"
 futures-util = "0.3"
+reqwest = { version = "0.11", features = ["stream"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 # Vendor Openssl becuase linux 
 openssl = { version = "0.10", features = ["vendored"] }

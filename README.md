@@ -11,6 +11,7 @@ A lightweight Telegram <-> Kafka bridge written in **Rust**, designed to decoupl
 * Uses [`teloxide`](https://github.com/teloxide/teloxide) for Telegram bot integration
 * Uses [`rdkafka`](https://github.com/fede1024/rust-rdkafka) for Kafka connectivity
 * Forwards full Telegram message objects to Kafka
+* **Automatic image downloading** - Downloads images from Telegram messages and stores them locally ([documentation](docs/image_downloading.md))
 * Listens for outbound messages on a Kafka topic and sends them back to Telegram
 * Minimal, event-driven, and easy to extend
 
@@ -37,6 +38,7 @@ A lightweight Telegram <-> Kafka bridge written in **Rust**, designed to decoupl
    * `KAFKA_BROKER` (optional, default: `localhost:9092`)
    * `KAFKA_IN_TOPIC` (optional, default: `com.sectorflabs.ratatoskr.in`)
    * `KAFKA_OUT_TOPIC` (optional, default: `com.sectorflabs.ratatoskr.out`)
+   * `IMAGE_STORAGE_DIR` (optional, default: `./images`)
 
    You can place these in a `.env` file or export them in your shell. A `.env.example` file is provided as a template.
 
@@ -142,8 +144,20 @@ These are standard Telegram messages received by the bot.
   "from": { "id": 456, "first_name": "User", "is_bot": false, "username": "testuser" },
   "chat": { "id": 789, "type": "private", "first_name": "User", "username": "testuser" },
   "date": 1678901234,
-  "text": "Hello bot!"
+  "text": "Hello bot!",
   // ... other fields from the Telegram Message object
+  
+  // If the message contains images, this field will be added:
+  "downloaded_images": [
+    {
+      "file_id": "AgACAgIAAxkDAAIC_mF...",
+      "file_unique_id": "abc123def456", 
+      "width": 1920,
+      "height": 1080,
+      "file_size": 245760,
+      "local_path": "./images/-123456789_42_abc123def456_1703123456.jpg"
+    }
+  ]
 }
 ```
 

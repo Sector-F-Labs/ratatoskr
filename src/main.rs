@@ -55,6 +55,13 @@ async fn main() {
     });
     tracing::info!(kafka_out_topic = %kafka_out_topic, "Using Kafka OUT topic");
 
+    let image_storage_dir = env::var("IMAGE_STORAGE_DIR").unwrap_or_else(|_| {
+        tracing::info!("IMAGE_STORAGE_DIR not set, defaulting to ./images");
+        "./images/in".to_string()
+    });
+    let image_storage_dir = Arc::new(image_storage_dir.clone());
+    tracing::info!(image_storage_dir = %image_storage_dir, "Using image storage directory");
+
     let bot = Bot::new(telegram_token.clone());
 
     let producer: Arc<FutureProducer> = Arc::new(
@@ -103,7 +110,7 @@ async fn main() {
         .branch(Update::filter_callback_query().endpoint(callback_query_handler));
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![producer, kafka_in_topic])
+        .dependencies(dptree::deps![producer, kafka_in_topic, image_storage_dir])
         .enable_ctrlc_handler()
         .build()
         .dispatch()

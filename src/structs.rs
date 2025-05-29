@@ -21,3 +21,13 @@ pub struct IncomingCallbackMessage {
     pub callback_data: String,
     pub callback_query_id: String,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ImageInfo {
+    pub file_id: String,
+    pub file_unique_id: String,
+    pub width: u32,
+    pub height: u32,
+    pub file_size: u32,
+    pub local_path: String,
+}

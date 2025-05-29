@@ -2,14 +2,60 @@ use rdkafka::producer::{FutureProducer, FutureRecord};
 use std::error::Error;
 use std::sync::Arc;
 use teloxide::prelude::{Bot, CallbackQuery, Message, Requester};
+use crate::utils::{download_image, select_best_photo};
+use crate::structs::ImageInfo;
 
 pub async fn message_handler(
-    _bot: Bot,
+    bot: Bot,
     msg: Message,
     producer: Arc<FutureProducer>,
     kafka_in_topic: Arc<String>,
+    image_storage_dir: Arc<String>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let json = match serde_json::to_string(&msg) {
+    // Handle image download if message contains photos
+    let mut downloaded_images: Vec<ImageInfo> = Vec::new();
+    if let Some(photos) = msg.photo() {
+        if let Some(best_photo) = select_best_photo(photos) {
+            tracing::info!(
+                message_id = %msg.id.0, 
+                chat_id = %msg.chat.id.0, 
+                file_id = %best_photo.file.id,
+                width = %best_photo.width,
+                height = %best_photo.height,
+                "Downloading image from Telegram message"
+            );
+            
+            match download_image(&bot, best_photo, &image_storage_dir, msg.chat.id.0, msg.id.0).await {
+                Ok(image_info) => {
+                    tracing::info!(
+                        message_id = %msg.id.0,
+                        chat_id = %msg.chat.id.0,
+                        local_path = %image_info.local_path,
+                        "Image downloaded successfully"
+                    );
+                    downloaded_images.push(image_info);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        message_id = %msg.id.0,
+                        chat_id = %msg.chat.id.0,
+                        file_id = %best_photo.file.id,
+                        error = %e,
+                        "Failed to download image"
+                    );
+                    // Continue processing even if image download fails
+                }
+            }
+        }
+    }
+
+    // Create enhanced message structure with image info
+    let mut enhanced_msg = serde_json::to_value(&msg)?;
+    if !downloaded_images.is_empty() {
+        enhanced_msg["downloaded_images"] = serde_json::to_value(&downloaded_images)?;
+    }
+
+    let json = match serde_json::to_string(&enhanced_msg) {
         Ok(json_string) => json_string,
         Err(e) => {
             tracing::error!(message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to serialize Telegram message to JSON");
@@ -17,7 +63,15 @@ pub async fn message_handler(
         }
     };
 
-    tracing::info!(topic = %kafka_in_topic, key = "message", message_id = %msg.id.0, chat_id = %msg.chat.id.0, "Sending Telegram message to Kafka");
+    tracing::info!(
+        topic = %kafka_in_topic, 
+        key = "message", 
+        message_id = %msg.id.0, 
+        chat_id = %msg.chat.id.0, 
+        has_images = %(!downloaded_images.is_empty()),
+        image_count = %downloaded_images.len(),
+        "Sending Telegram message to Kafka"
+    );
     let record = FutureRecord::to(kafka_in_topic.as_str())
         .payload(&json)
         .key("message");
