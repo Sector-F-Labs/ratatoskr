@@ -3,14 +3,14 @@ use std::error::Error;
 use std::sync::Arc;
 use teloxide::prelude::{Bot, CallbackQuery, Message, Requester};
 use crate::utils::{download_image, select_best_photo};
-use crate::structs::ImageInfo;
+use crate::structs::{ImageInfo, IncomingMessage, KafkaInTopic, ImageStorageDir};
 
 pub async fn message_handler(
     bot: Bot,
     msg: Message,
     producer: Arc<FutureProducer>,
-    kafka_in_topic: Arc<String>,
-    image_storage_dir: Arc<String>,
+    kafka_in_topic: KafkaInTopic,
+    image_storage_dir: ImageStorageDir,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Handle image download if message contains photos
     let mut downloaded_images: Vec<ImageInfo> = Vec::new();
@@ -25,7 +25,7 @@ pub async fn message_handler(
                 "Downloading image from Telegram message"
             );
             
-            match download_image(&bot, best_photo, &image_storage_dir, msg.chat.id.0, msg.id.0).await {
+            match download_image(&bot, best_photo, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
                 Ok(image_info) => {
                     tracing::info!(
                         message_id = %msg.id.0,
@@ -49,22 +49,24 @@ pub async fn message_handler(
         }
     }
 
-    // Create enhanced message structure with image info
-    let mut enhanced_msg = serde_json::to_value(&msg)?;
-    if !downloaded_images.is_empty() {
-        enhanced_msg["downloaded_images"] = serde_json::to_value(&downloaded_images)?;
-    }
+    // Create unified incoming message
+    let incoming_msg = IncomingMessage::new_telegram_message(
+        msg.clone(),
+        downloaded_images.clone(),
+        None, // bot_id - could be retrieved from bot.get_me() if needed
+        None, // bot_username - could be retrieved from bot.get_me() if needed
+    );
 
-    let json = match serde_json::to_string(&enhanced_msg) {
+    let json = match serde_json::to_string(&incoming_msg) {
         Ok(json_string) => json_string,
         Err(e) => {
-            tracing::error!(message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to serialize Telegram message to JSON");
+            tracing::error!(message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to serialize IncomingMessage to JSON");
             return Err(Box::new(e));
         }
     };
 
     tracing::info!(
-        topic = %kafka_in_topic, 
+        topic = %kafka_in_topic.0, 
         key = "message", 
         message_id = %msg.id.0, 
         chat_id = %msg.chat.id.0, 
@@ -72,12 +74,12 @@ pub async fn message_handler(
         image_count = %downloaded_images.len(),
         "Sending Telegram message to Kafka"
     );
-    let record = FutureRecord::to(kafka_in_topic.as_str())
+    let record = FutureRecord::to(kafka_in_topic.0.as_str())
         .payload(&json)
         .key("message");
 
     if let Err((e, _)) = producer.send(record, None).await {
-        tracing::error!(topic = %kafka_in_topic, key = "message", message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to send message to Kafka");
+        tracing::error!(topic = %kafka_in_topic.0, key = "message", message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to send message to Kafka");
         return Err(Box::new(e));
     }
     Ok(())
@@ -87,12 +89,14 @@ pub async fn callback_query_handler(
     bot: Bot,
     query: CallbackQuery,
     producer: Arc<FutureProducer>,
-    kafka_in_topic: Arc<String>,
+    kafka_in_topic: KafkaInTopic,
+    _image_storage_dir: ImageStorageDir,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let user_id = query.from.id.0;
     let query_id = query.id.clone();
     let data = query.data.as_deref().unwrap_or_default();
     let message_id = query.message.as_ref().map(|m| m.id().0);
+    let chat_id = query.message.as_ref().map_or(0, |m| m.chat().id.0);
 
     tracing::debug!(callback_query_id = %query_id, %user_id, message_id = ?message_id, callback_data = %data, "Received callback query");
 
@@ -100,23 +104,31 @@ pub async fn callback_query_handler(
         tracing::warn!(callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to answer callback query");
     }
 
-    let incoming_msg = crate::utils::prepare_incoming_callback_message(&query);
+    let incoming_msg = IncomingMessage::new_callback_query(
+        chat_id,
+        user_id,
+        message_id.unwrap_or(0),
+        data.to_string(),
+        query_id.clone(),
+        None, // bot_id - could be retrieved from bot.get_me() if needed
+        None, // bot_username - could be retrieved from bot.get_me() if needed
+    );
 
     let json = match serde_json::to_string(&incoming_msg) {
         Ok(json_string) => json_string,
         Err(e) => {
-            tracing::error!(callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to serialize IncomingCallbackMessage to JSON");
+            tracing::error!(callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to serialize IncomingMessage to JSON");
             return Err(Box::new(e));
         }
     };
 
-    tracing::info!(topic = %kafka_in_topic, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, "Sending callback data to Kafka");
-    let record = FutureRecord::to(kafka_in_topic.as_str())
+    tracing::info!(topic = %kafka_in_topic.0, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, "Sending callback data to Kafka");
+    let record = FutureRecord::to(kafka_in_topic.0.as_str())
         .payload(&json)
         .key("callback_query");
 
     if let Err((e, _)) = producer.send(record, None).await {
-        tracing::error!(topic = %kafka_in_topic, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to send callback data to Kafka");
+        tracing::error!(topic = %kafka_in_topic.0, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to send callback data to Kafka");
         return Err(Box::new(e));
     }
 

@@ -10,6 +10,7 @@ use teloxide::{dptree, prelude::*};
 use tracing_subscriber::{EnvFilter, fmt};
 
 mod structs;
+use structs::{KafkaInTopic, ImageStorageDir};
 
 mod telegram_handlers;
 use telegram_handlers::*;
@@ -46,8 +47,8 @@ async fn main() {
         tracing::info!("KAFKA_IN_TOPIC not set, defaulting to com.sectorflabs.ratatoskr.in");
         "com.sectorflabs.ratatoskr.in".to_string()
     });
-    let kafka_in_topic = Arc::new(kafka_in_topic_val.clone());
-    tracing::info!(kafka_in_topic = %kafka_in_topic, "Using Kafka IN topic");
+    let kafka_in_topic = KafkaInTopic(kafka_in_topic_val.clone());
+    tracing::info!(kafka_in_topic = %kafka_in_topic.0, "Using Kafka IN topic");
 
     let kafka_out_topic = env::var("KAFKA_OUT_TOPIC").unwrap_or_else(|_| {
         tracing::info!("KAFKA_OUT_TOPIC not set, defaulting to com.sectorflabs.ratatoskr.out");
@@ -59,8 +60,8 @@ async fn main() {
         tracing::info!("IMAGE_STORAGE_DIR not set, defaulting to ./images");
         "./images/in".to_string()
     });
-    let image_storage_dir = Arc::new(image_storage_dir.clone());
-    tracing::info!(image_storage_dir = %image_storage_dir, "Using image storage directory");
+    let image_storage_dir = ImageStorageDir(image_storage_dir.clone());
+    tracing::info!(image_storage_dir = %image_storage_dir.0, "Using image storage directory");
 
     let bot = Bot::new(telegram_token.clone());
 

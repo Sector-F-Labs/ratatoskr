@@ -124,99 +124,147 @@ For a complete development environment with Kafka, Zookeeper, and Kafdrop (a Kaf
 
 ---
 
-## 📤 Kafka Message Formats
+## 📤 Unified Message Types
 
-This section describes the JSON message formats used by Ratatoskr when communicating with Kafka.
+Ratatoskr uses a unified message type system for consistent handling of all Kafka communications. For detailed documentation, see [Unified Message Types](docs/unified_message_types.md).
 
 ### Incoming Messages to `KAFKA_IN_TOPIC` (e.g., `com.sectorflabs.ratatoskr.in`)
 
-Messages sent *from* Telegram *to* Kafka are placed on this topic. There are two main types of messages:
+All messages from Telegram are wrapped in the unified `IncomingMessage` type:
 
-#### 1. Standard Messages
-
-These are standard Telegram messages received by the bot.
-*   **Kafka Key:** "message"
-*   **Payload:** The full Telegram `Message` object, serialized as JSON.
-
+#### Telegram Message Example
 ```json
 {
-  "message_id": 123,
-  "from": { "id": 456, "first_name": "User", "is_bot": false, "username": "testuser" },
-  "chat": { "id": 789, "type": "private", "first_name": "User", "username": "testuser" },
-  "date": 1678901234,
-  "text": "Hello bot!",
-  // ... other fields from the Telegram Message object
-  
-  // If the message contains images, this field will be added:
-  "downloaded_images": [
-    {
-      "file_id": "AgACAgIAAxkDAAIC_mF...",
-      "file_unique_id": "abc123def456", 
-      "width": 1920,
-      "height": 1080,
-      "file_size": 245760,
-      "local_path": "./images/-123456789_42_abc123def456_1703123456.jpg"
+  "message_type": {
+    "type": "TelegramMessage",
+    "data": {
+      "message": {
+        "message_id": 123,
+        "from": { "id": 456, "first_name": "User", "username": "testuser" },
+        "chat": { "id": 789, "type": "private" },
+        "date": 1678901234,
+        "text": "Hello bot!"
+      },
+      "downloaded_images": [
+        {
+          "file_id": "AgACAgIAAxkDAAIC_mF...",
+          "file_unique_id": "abc123def456",
+          "width": 1920,
+          "height": 1080,
+          "file_size": 245760,
+          "local_path": "./images/-123456789_42_abc123def456_1703123456.jpg"
+        }
+      ]
     }
-  ]
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "source": {
+    "platform": "telegram",
+    "bot_id": null,
+    "bot_username": null
+  }
 }
 ```
 
-#### 2. Callback Query Messages (Button Clicks)
-
-These messages are generated when a user clicks an inline button sent by the bot.
-*   **Kafka Key:** "callback_query"
-*   **Payload:** A custom JSON structure containing details about the button click.
-
+#### Callback Query Example
 ```json
 {
-    "chat_id": 123456789,
-    "user_id": 987654321,
-    "message_id": 54321,
-    "callback_data": "action_1",
-    "callback_query_id": "1234567890123456789"
+  "message_type": {
+    "type": "CallbackQuery",
+    "data": {
+      "chat_id": 123456789,
+      "user_id": 987654321,
+      "message_id": 54321,
+      "callback_data": "action_1",
+      "callback_query_id": "1234567890123456789"
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "source": {
+    "platform": "telegram",
+    "bot_id": null,
+    "bot_username": null
+  }
 }
 ```
-
-**Field Descriptions:**
-*   `chat_id`: ID of the chat where the button was clicked.
-*   `user_id`: ID of the user who clicked the button.
-*   `message_id`: ID of the message to which the button was attached.
-*   `callback_data`: The `callback_data` string associated with the clicked button.
-*   `callback_query_id`: The unique ID for this callback query, useful for responding or acknowledging.
 
 ### Outgoing Messages from `KAFKA_OUT_TOPIC` (e.g., `com.sectorflabs.ratatoskr.out`)
 
-Messages sent *from* Kafka *to* Telegram are placed on this topic.
-*   **Kafka Key:** Not specified (can be anything, typically ignored by Ratatoskr).
-*   **Payload:** A JSON object defining the message to be sent.
+All messages to Telegram use the unified `OutgoingMessage` type:
+
+#### Text Message Example
+```json
+{
+  "message_type": {
+    "type": "TextMessage",
+    "data": {
+      "text": "Hello from Ratatoskr! This message can have buttons.",
+      "buttons": [
+        [
+          {"text": "Button 1", "callback_data": "action_1"},
+          {"text": "Button 2", "callback_data": "action_2"}
+        ]
+      ],
+      "parse_mode": "HTML",
+      "disable_web_page_preview": false
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "target": {
+    "platform": "telegram",
+    "chat_id": 123456789,
+    "thread_id": null
+  }
+}
+```
+
+#### Image Message Example
+```json
+{
+  "message_type": {
+    "type": "ImageMessage",
+    "data": {
+      "image_path": "/path/to/image.jpg",
+      "caption": "Check out this image!",
+      "buttons": [
+        [{"text": "Like", "callback_data": "like_image"}]
+      ]
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "target": {
+    "platform": "telegram",
+    "chat_id": 123456789,
+    "thread_id": null
+  }
+}
+```
+
+### Supported Message Types
+
+- **TextMessage** - Send text with optional formatting and buttons
+- **ImageMessage** - Send images from local filesystem
+- **DocumentMessage** - Send documents/files from local filesystem  
+- **EditMessage** - Edit previously sent messages
+- **DeleteMessage** - Delete messages from chat
+
+### Legacy Format Support
+
+The old message format is still supported for backwards compatibility:
 
 ```json
 {
   "chat_id": 123456789,
-  "text": "Hello from Ratatoskr! This message can also have buttons.",
+  "text": "Hello from legacy format!",
   "buttons": [
-      [
-          {"text": "Button 1 Label", "callback_data": "action_1"},
-          {"text": "Button 2 Label", "callback_data": "action_2"}
-      ],
-      [
-          {"text": "Another Row Button", "callback_data": "action_3"}
-      ]
+    [{"text": "Button", "callback_data": "action"}]
   ]
 }
 ```
-The `buttons` field is optional. If included, it must be a `Vec<Vec<ButtonInfo>>` (a list of lists of button information objects). Each `ButtonInfo` object has the following structure:
-*   `text`: The text label displayed on the button.
-*   `callback_data`: The string data that will be sent back to the bot when this button is clicked.
 
-If `buttons` is not provided or is `null`, a plain text message will be sent.
-Example without buttons:
-```json
-{
-  "chat_id": 123456789,
-  "text": "Hello from Ratatoskr! This is a plain message."
-}
-```
+For complete documentation, see [Unified Message Types](docs/unified_message_types.md).
+For practical examples and usage patterns, see [Examples](docs/examples.md).
+For troubleshooting common issues, see [Troubleshooting Guide](docs/troubleshooting.md).
 
 ## 🧠 Why Ratatoskr?
 
