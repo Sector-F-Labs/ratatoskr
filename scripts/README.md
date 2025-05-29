@@ -1,110 +1,78 @@
 # Ratatoskr Test Scripts
 
-This directory contains scripts for testing and interacting with Ratatoskr's Kafka message handling. These scripts are designed to help developers test message handling without needing to set up a full Telegram environment.
+This directory contains scripts for testing different message types with Ratatoskr's Kafka message handling. These scripts help developers test message sending without needing complex setups.
 
 ## Prerequisites
 
 - [Redpanda CLI (`rpk`)](https://docs.redpanda.com/docs/reference/rpk-commands/) or Kafka CLI tools
 - `jq` for JSON formatting (install with `brew install jq` on macOS or `apt install jq` on Debian/Ubuntu)
+- Environment variable `CHAT_ID` set to your Telegram chat ID
 
 ## Available Scripts
 
-### 1. Show Topic Contents
+### 1. Basic Text Message
 
 ```bash
-./scripts/show_topics.sh [number_of_messages]
+make produce TEXT="Your message here"
+# or directly:
+./scripts/produce.sh "Your message here"
 ```
 
-Displays information about both Kafka topics, including their current contents.
+Sends a simple text message to Telegram.
 
-**Arguments:**
-- `number_of_messages`: Optional. Number of messages to show from each topic (default: 5)
-
-### 2. Consume Messages
+### 2. Message with Buttons
 
 ```bash
-./scripts/consume.sh [number_of_messages]
+make test_buttons TEXT="Choose an option"
+# or directly:
+./scripts/produce_with_buttons.sh "Choose an option"
 ```
 
-Consumes messages from the input Kafka topic (`com.sectorflabs.ratatoskr.in` by default).
+Sends a message with inline keyboard buttons to Telegram.
 
-**Arguments:**
-- `number_of_messages`: Optional. Number of messages to consume (default: 1)
-
-### 3. Produce Basic Messages
+### 3. Image Message
 
 ```bash
-./scripts/produce.sh [message_text]
+make test_image IMAGE_PATH="path/to/image.jpg" CAPTION="Image caption"
+# or directly:
+./scripts/produce_image.sh "path/to/image.jpg" "Image caption"
 ```
 
-Produces a simple text message to the output Kafka topic (`com.sectorflabs.ratatoskr.out` by default).
+Sends an image with caption and buttons to Telegram.
 
-**Arguments:**
-- `message_text`: Optional. The text content of the message (default: "Hello from Ratatoskr test script!")
-
-**Note:** This script uses the `CHAT_ID` environment variable from your `.envrc` file.
-
-### 4. Produce Messages with Buttons
+### 4. Simulate Button Click
 
 ```bash
-./scripts/produce_with_buttons.sh [message_text]
+make test_callback MESSAGE_ID=123 CALLBACK_DATA="button_action"
+# or directly:
+./scripts/simulate_callback.sh 123 "button_action"
 ```
 
-Produces a message with inline buttons to the output Kafka topic.
-
-**Arguments:**
-- `message_text`: Optional. The text content of the message (default: "This is a test message with buttons!")
-
-**Note:** This script uses the `CHAT_ID` environment variable from your `.envrc` file.
-
-### 5. Simulate Callback Query (Button Click)
-
-```bash
-./scripts/simulate_callback.sh [message_id] [callback_data] [callback_query_id]
-```
-
-Simulates a button click by producing a callback query message to the input Kafka topic.
-
-**Arguments:**
-- `message_id`: Optional. The message ID containing the clicked button (default: "1234")
-- `callback_data`: Optional. The callback data associated with the clicked button (default: "button1_action")
-- `callback_query_id`: Optional. A unique ID for this callback (generated automatically if not provided)
-
-**Note:** This script uses the `CHAT_ID` environment variable from your `.envrc` file for both the chat_id and user_id (unless USER_ID is separately defined).
-
-### 6. Test Full Flow
-
-```bash
-./scripts/test_full_flow.sh
-```
-
-Runs a complete test flow that demonstrates the entire message cycle:
-1. Sending a message with buttons
-2. Simulating receipt of the message in Telegram
-3. Simulating a button click
-4. Consuming the callback message
-
-**Note:** This script uses the `CHAT_ID` environment variable from your `.envrc` file.
+Simulates a user clicking a button by sending a callback query message.
 
 ## Environment Variables
 
-All scripts respect the following environment variables:
+All scripts use these environment variables:
 
-- `CHAT_ID`: Telegram chat ID to use (required, normally defined in `.envrc`)
-- `USER_ID`: Telegram user ID (defaults to same value as CHAT_ID if not provided)
+- `CHAT_ID`: Telegram chat ID (required)
+- `USER_ID`: Telegram user ID (defaults to CHAT_ID if not set)
 - `KAFKA_BROKER`: Kafka broker address (default: "localhost:9092")
 - `KAFKA_IN_TOPIC`: Input topic name (default: "com.sectorflabs.ratatoskr.in")
 - `KAFKA_OUT_TOPIC`: Output topic name (default: "com.sectorflabs.ratatoskr.out")
 
-You can override these by setting the variables before running the scripts:
+Set `CHAT_ID` in your `.envrc` file or export it:
 
 ```bash
-KAFKA_BROKER=my-kafka:9093 KAFKA_OUT_TOPIC=custom.topic ./scripts/produce.sh "Custom message"
+export CHAT_ID=123456789
 ```
+
+## Monitoring Messages
+
+Use the Redpanda Console UI to monitor Kafka topics instead of command-line scripts. The console provides a better interface for viewing message contents and topic activity.
 
 ## Making Scripts Executable
 
-Before running the scripts, make them executable:
+Before running scripts directly, make them executable:
 
 ```bash
 chmod +x scripts/*.sh

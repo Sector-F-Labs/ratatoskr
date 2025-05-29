@@ -1,6 +1,6 @@
 # Makefile for Deno Telegram <-> Kafka (Redpanda) Bot
 
-.PHONY: help install setup run dev stop consume produce test_flow test_buttons test_image test_callback show_topics validate_json
+.PHONY: help install setup run dev stop produce test_buttons test_image test_callback
 
 # Redpanda config
 KAFKA_BROKER=localhost:9092
@@ -24,16 +24,10 @@ help:
 	@echo "  stop          Stop Redpanda container"
 	@echo ""
 	@echo "Testing targets:"
-	@echo "  consume       Consume messages from IN topic (N=number of messages)"
 	@echo "  produce       Send text message (TEXT=\"your message\")"
 	@echo "  test_buttons  Send message with buttons (TEXT=\"your message\")"
 	@echo "  test_image    Send image message (IMAGE_PATH=path CAPTION=\"caption\")"
 	@echo "  test_callback Simulate callback (MESSAGE_ID=123 CALLBACK_DATA=\"data\")"
-	@echo "  test_flow     Run full integration test"
-	@echo ""
-	@echo "Debug targets:"
-	@echo "  show_topics   Show recent topic messages (N=number of messages)"
-	@echo "  validate_json Validate JSON message format (JSON=\"...\" TYPE=incoming|outgoing)"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  CHAT_ID            - Target Telegram chat ID (required for testing)"
@@ -66,7 +60,7 @@ stop:
 consume:
 	./scripts/consume.sh $(N)
 
-produce:
+test_text:
 	./scripts/produce.sh "$(TEXT)"
 
 test_buttons:
@@ -75,17 +69,11 @@ test_buttons:
 test_image:
 	./scripts/produce_image.sh "$(IMAGE_PATH)" "$(CAPTION)"
 
+test_all_message_types: test_text test_buttons test_image
+	echo "All message types tested."
+
 test_callback:
 	./scripts/simulate_callback.sh $(MESSAGE_ID) "$(CALLBACK_DATA)"
-
-test_flow:
-	./scripts/test_full_flow.sh
-
-show_topics:
-	./scripts/show_topics.sh $(N)
-
-validate_json:
-	./scripts/validate_json.sh "$(JSON)" "$(TYPE)"
 
 pushpi:
 	rsync -av --delete \
