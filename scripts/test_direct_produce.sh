@@ -10,6 +10,8 @@ JSON_MESSAGE='{"chat_id":'$CHAT_ID',"text":"This is a test message from test_dir
 
 echo "Sending direct message to $KAFKA_OUT_TOPIC:"
 echo "$JSON_MESSAGE" | jq
-echo "$JSON_MESSAGE" | rpk topic produce $KAFKA_OUT_TOPIC --brokers $KAFKA_BROKER
+# Send the message with chat_id as key for proper partitioning
+# Compact the JSON to a single line to avoid rpk treating each line as separate message
+echo "$JSON_MESSAGE" | jq -c . | rpk topic produce $KAFKA_OUT_TOPIC --brokers $KAFKA_BROKER -k "$CHAT_ID"
 
 echo "Message sent!"
