@@ -1,13 +1,16 @@
-use crate::incoming::{FileInfo, FileType, FileMetadata};
+use crate::incoming::{FileInfo, FileMetadata, FileType};
 use crate::outgoing::ButtonInfo;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, PhotoSize, Audio, Voice, Video, VideoNote, Document, Sticker, Animation, FileMeta};
-use teloxide::prelude::Requester;
-use teloxide::Bot;
+use chrono::Utc;
+use std::error::Error;
 use std::path::Path;
+use teloxide::Bot;
+use teloxide::prelude::Requester;
+use teloxide::types::{
+    Animation, Audio, Document, FileMeta, InlineKeyboardButton, InlineKeyboardMarkup, PhotoSize,
+    Sticker, Video, VideoNote, Voice,
+};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use std::error::Error;
-use chrono::Utc;
 
 pub fn create_markup(buttons_opt: &Option<Vec<Vec<ButtonInfo>>>) -> Option<InlineKeyboardMarkup> {
     buttons_opt.as_ref().map(|buttons| {
@@ -21,8 +24,6 @@ pub fn create_markup(buttons_opt: &Option<Vec<Vec<ButtonInfo>>>) -> Option<Inlin
         }))
     })
 }
-
-
 
 /// Downloads a file from Telegram and saves it to the specified directory
 pub async fn download_file(
@@ -40,7 +41,7 @@ pub async fn download_file(
     // Get file info from Telegram
     let telegram_file = bot.get_file(&file.id).await?;
     let file_path = &telegram_file.path;
-    
+
     // Generate local filename with appropriate extension
     let extension = match file_type {
         FileType::Photo => "jpg",
@@ -51,45 +52,54 @@ pub async fn download_file(
         FileType::Document => {
             if let FileMetadata::Document { file_name, .. } = &metadata {
                 if let Some(name) = file_name {
-                    Path::new(name).extension().and_then(|ext| ext.to_str()).unwrap_or("bin")
+                    Path::new(name)
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .unwrap_or("bin")
                 } else {
                     "bin"
                 }
             } else {
                 "bin"
             }
-        },
+        }
         FileType::Sticker => "webp",
         FileType::Animation => "gif",
     };
-    
-    let filename = format!("{}_{}_{}_{}_{}.{}", 
+
+    let filename = format!(
+        "{}_{}_{}_{}_{}.{}",
         file_type_to_string(&file_type),
-        chat_id, 
-        message_id, 
-        file.unique_id, 
-        Utc::now().timestamp(), 
+        chat_id,
+        message_id,
+        file.unique_id,
+        Utc::now().timestamp(),
         extension
     );
     let local_path = Path::new(storage_dir).join(&filename);
 
     // Download the file
-    let download_url = format!("https://api.telegram.org/file/bot{}/{}", bot.token(), file_path);
+    let download_url = format!(
+        "https://api.telegram.org/file/bot{}/{}",
+        bot.token(),
+        file_path
+    );
     let response = reqwest::get(&download_url).await?;
-    
+
     if !response.status().is_success() {
         return Err(format!("Failed to download file: HTTP {}", response.status()).into());
     }
 
     let content = response.bytes().await?;
-    
+
     // Save to local filesystem
     let mut file_handle = fs::File::create(&local_path).await?;
     file_handle.write_all(&content).await?;
     file_handle.flush().await?;
 
     // Get absolute path for applications to use
-    let absolute_path = local_path.canonicalize()
+    let absolute_path = local_path
+        .canonicalize()
         .map_err(|e| format!("Failed to get absolute path: {}", e))?;
 
     tracing::info!(
@@ -112,11 +122,10 @@ pub async fn download_file(
 
 /// Selects the best quality photo from a vector of PhotoSize
 pub fn select_best_photo(photos: &[PhotoSize]) -> Option<&PhotoSize> {
-    photos.iter()
-        .max_by(|a, b| {
-            // Compare by dimensions since file.size is not optional in teloxide
-            (a.width * a.height).cmp(&(b.width * b.height))
-        })
+    photos.iter().max_by(|a, b| {
+        // Compare by dimensions since file.size is not optional in teloxide
+        (a.width * a.height).cmp(&(b.width * b.height))
+    })
 }
 
 /// Helper function to convert FileType to string for logging and filenames
@@ -141,7 +150,7 @@ pub fn file_info_from_photo(photo: &PhotoSize) -> (FileMeta, FileType, FileMetad
         FileMetadata::Photo {
             width: photo.width,
             height: photo.height,
-        }
+        },
     )
 }
 
@@ -151,13 +160,14 @@ pub fn file_info_from_audio(audio: &Audio) -> (FileMeta, FileType, FileMetadata)
         audio.file.clone(),
         FileType::Audio,
         FileMetadata::Audio {
-            duration: serde_json::to_value(&audio.duration).ok()
+            duration: serde_json::to_value(&audio.duration)
+                .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
                 .unwrap_or(0),
             performer: audio.performer.clone(),
             title: audio.title.clone(),
-        }
+        },
     )
 }
 
@@ -167,11 +177,12 @@ pub fn file_info_from_voice(voice: &Voice) -> (FileMeta, FileType, FileMetadata)
         voice.file.clone(),
         FileType::Voice,
         FileMetadata::Voice {
-            duration: serde_json::to_value(&voice.duration).ok()
+            duration: serde_json::to_value(&voice.duration)
+                .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
                 .unwrap_or(0),
-        }
+        },
     )
 }
 
@@ -183,11 +194,12 @@ pub fn file_info_from_video(video: &Video) -> (FileMeta, FileType, FileMetadata)
         FileMetadata::Video {
             width: video.width,
             height: video.height,
-            duration: serde_json::to_value(&video.duration).ok()
+            duration: serde_json::to_value(&video.duration)
+                .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
                 .unwrap_or(0),
-        }
+        },
     )
 }
 
@@ -198,11 +210,12 @@ pub fn file_info_from_video_note(video_note: &VideoNote) -> (FileMeta, FileType,
         FileType::VideoNote,
         FileMetadata::VideoNote {
             length: video_note.length,
-            duration: serde_json::to_value(&video_note.duration).ok()
+            duration: serde_json::to_value(&video_note.duration)
+                .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
                 .unwrap_or(0),
-        }
+        },
     )
 }
 
@@ -214,7 +227,7 @@ pub fn file_info_from_document(document: &Document) -> (FileMeta, FileType, File
         FileMetadata::Document {
             file_name: document.file_name.clone(),
             mime_type: document.mime_type.as_ref().map(|m| m.to_string()),
-        }
+        },
     )
 }
 
@@ -227,7 +240,7 @@ pub fn file_info_from_sticker(sticker: &Sticker) -> (FileMeta, FileType, FileMet
             width: sticker.width as u32,
             height: sticker.height as u32,
             emoji: sticker.emoji.clone(),
-        }
+        },
     )
 }
 
@@ -239,10 +252,11 @@ pub fn file_info_from_animation(animation: &Animation) -> (FileMeta, FileType, F
         FileMetadata::Animation {
             width: animation.width,
             height: animation.height,
-            duration: serde_json::to_value(&animation.duration).ok()
+            duration: serde_json::to_value(&animation.duration)
+                .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
                 .unwrap_or(0),
-        }
+        },
     )
 }

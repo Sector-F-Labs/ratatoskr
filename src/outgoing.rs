@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 // Unified outgoing message type for the OUT topic
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -127,8 +127,6 @@ pub struct ButtonInfo {
     pub callback_data: String,
 }
 
-// Legacy compatibility types (deprecated but kept for backwards compatibility)
-#[deprecated(note = "Use OutgoingMessage with OutgoingMessageType::TextMessage instead")]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OutgoingKafkaMessage {
     pub chat_id: i64,
@@ -138,6 +136,7 @@ pub struct OutgoingKafkaMessage {
 
 // Helper implementations
 impl OutgoingMessage {
+    #[allow(dead_code)]
     pub fn new_text_message(
         chat_id: i64,
         text: String,
@@ -159,6 +158,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_image_message(
         chat_id: i64,
         image_path: String,
@@ -180,6 +180,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_audio_message(
         chat_id: i64,
         audio_path: String,
@@ -207,6 +208,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_voice_message(
         chat_id: i64,
         voice_path: String,
@@ -230,6 +232,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_video_message(
         chat_id: i64,
         video_path: String,
@@ -259,6 +262,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_video_note_message(
         chat_id: i64,
         video_note_path: String,
@@ -282,6 +286,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_sticker_message(
         chat_id: i64,
         sticker_path: String,
@@ -303,6 +308,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_animation_message(
         chat_id: i64,
         animation_path: String,
@@ -330,6 +336,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_edit_message(
         chat_id: i64,
         message_id: i32,
@@ -351,6 +358,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_delete_message(chat_id: i64, message_id: i32) -> Self {
         Self {
             message_type: OutgoingMessageType::DeleteMessage(DeleteMessageData { message_id }),
@@ -363,6 +371,7 @@ impl OutgoingMessage {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_document_message(
         chat_id: i64,
         document_path: String,
@@ -386,3 +395,4 @@ impl OutgoingMessage {
         }
     }
 }
+

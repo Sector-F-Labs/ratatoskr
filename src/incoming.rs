@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use teloxide::types::Message as TelegramMessage;
-use chrono::{DateTime, Utc};
 
 // Unified incoming message type for the IN topic
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -74,18 +74,43 @@ pub enum FileType {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum FileMetadata {
-    Photo { width: u32, height: u32 },
-    Audio { duration: u32, performer: Option<String>, title: Option<String> },
-    Voice { duration: u32 },
-    Video { width: u32, height: u32, duration: u32 },
-    VideoNote { length: u32, duration: u32 },
-    Document { file_name: Option<String>, mime_type: Option<String> },
-    Sticker { width: u32, height: u32, emoji: Option<String> },
-    Animation { width: u32, height: u32, duration: u32 },
+    Photo {
+        width: u32,
+        height: u32,
+    },
+    Audio {
+        duration: u32,
+        performer: Option<String>,
+        title: Option<String>,
+    },
+    Voice {
+        duration: u32,
+    },
+    Video {
+        width: u32,
+        height: u32,
+        duration: u32,
+    },
+    VideoNote {
+        length: u32,
+        duration: u32,
+    },
+    Document {
+        file_name: Option<String>,
+        mime_type: Option<String>,
+    },
+    Sticker {
+        width: u32,
+        height: u32,
+        emoji: Option<String>,
+    },
+    Animation {
+        width: u32,
+        height: u32,
+        duration: u32,
+    },
 }
 
-// Legacy compatibility - deprecated
-#[deprecated(note = "Use FileInfo instead")]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ImageInfo {
     pub file_id: String,
@@ -96,7 +121,6 @@ pub struct ImageInfo {
     pub local_path: String,
 }
 
-#[deprecated(note = "Use IncomingMessage with IncomingMessageType::CallbackQuery instead")]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IncomingCallbackMessage {
     pub chat_id: i64,
@@ -182,3 +206,4 @@ impl IncomingMessage {
         }
     }
 }
+
