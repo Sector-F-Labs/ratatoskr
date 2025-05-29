@@ -25,8 +25,9 @@ EOF
 echo "Producing message with buttons to $KAFKA_OUT_TOPIC:"
 cat "$TMP_FILE" | jq 2>/dev/null || cat "$TMP_FILE"
 
-# Send the message to Kafka directly from the file
-cat "$TMP_FILE" | rpk topic produce "$KAFKA_OUT_TOPIC" --brokers "$KAFKA_BROKER"
+# Send the message to Kafka directly from the file with chat_id as key for proper partitioning
+# Compact the JSON to a single line to avoid rpk treating each line as separate message
+cat "$TMP_FILE" | jq -c . | rpk topic produce "$KAFKA_OUT_TOPIC" --brokers "$KAFKA_BROKER" -k "$CHAT_ID"
 
 # Clean up
 rm "$TMP_FILE"
