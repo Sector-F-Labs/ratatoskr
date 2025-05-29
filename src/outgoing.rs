@@ -127,13 +127,6 @@ pub struct ButtonInfo {
     pub callback_data: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct OutgoingKafkaMessage {
-    pub chat_id: i64,
-    pub text: String,
-    pub buttons: Option<Vec<Vec<ButtonInfo>>>,
-}
-
 // Helper implementations
 impl OutgoingMessage {
     #[allow(dead_code)]
