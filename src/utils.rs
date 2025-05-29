@@ -1,4 +1,5 @@
-use crate::structs::{ButtonInfo, FileInfo, FileType, FileMetadata};
+use crate::incoming::{FileInfo, FileType, FileMetadata};
+use crate::outgoing::ButtonInfo;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, PhotoSize, Audio, Voice, Video, VideoNote, Document, Sticker, Animation, FileMeta};
 use teloxide::prelude::Requester;
 use teloxide::Bot;

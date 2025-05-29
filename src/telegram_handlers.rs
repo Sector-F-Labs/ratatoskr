@@ -7,7 +7,8 @@ use crate::utils::{
     file_info_from_voice, file_info_from_video, file_info_from_video_note, 
     file_info_from_document, file_info_from_sticker, file_info_from_animation
 };
-use crate::structs::{FileInfo, IncomingMessage, KafkaInTopic, ImageStorageDir};
+use crate::structs::{KafkaInTopic, ImageStorageDir};
+use crate::incoming::{FileInfo, IncomingMessage};
 
 pub async fn message_handler(
     bot: Bot,

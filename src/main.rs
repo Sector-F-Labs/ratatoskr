@@ -12,6 +12,9 @@ use tracing_subscriber::{EnvFilter, fmt};
 mod structs;
 use structs::{ImageStorageDir, KafkaInTopic};
 
+mod incoming;
+mod outgoing;
+
 mod telegram_handlers;
 use telegram_handlers::*;
 

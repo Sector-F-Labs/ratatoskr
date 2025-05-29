@@ -1,4 +1,4 @@
-use crate::structs::{OutgoingMessage, OutgoingMessageType, OutgoingKafkaMessage};
+use crate::outgoing::{OutgoingMessage, OutgoingMessageType, OutgoingKafkaMessage};
 use crate::utils::create_markup;
 use futures_util::StreamExt;
 use rdkafka::consumer::StreamConsumer;
