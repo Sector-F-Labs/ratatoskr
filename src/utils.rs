@@ -98,7 +98,6 @@ pub fn create_reply_keyboard(keyboard_opt: &Option<ReplyKeyboardMarkup>) -> Opti
     })
 }
 
-/// Downloads a file from Telegram and saves it to the specified directory
 pub async fn download_file(
     bot: &Bot,
     file: &FileMeta,
@@ -193,7 +192,6 @@ pub async fn download_file(
     })
 }
 
-/// Selects the best quality photo from a vector of PhotoSize
 pub fn select_best_photo(photos: &[PhotoSize]) -> Option<&PhotoSize> {
     photos.iter().max_by(|a, b| {
         // Compare by dimensions since file.size is not optional in teloxide
@@ -201,7 +199,6 @@ pub fn select_best_photo(photos: &[PhotoSize]) -> Option<&PhotoSize> {
     })
 }
 
-/// Helper function to convert FileType to string for logging and filenames
 fn file_type_to_string(file_type: &FileType) -> &'static str {
     match file_type {
         FileType::Photo => "photo",
@@ -215,7 +212,6 @@ fn file_type_to_string(file_type: &FileType) -> &'static str {
     }
 }
 
-/// Creates FileInfo from PhotoSize
 pub fn file_info_from_photo(photo: &PhotoSize) -> (FileMeta, FileType, FileMetadata) {
     (
         photo.file.clone(),
@@ -227,7 +223,6 @@ pub fn file_info_from_photo(photo: &PhotoSize) -> (FileMeta, FileType, FileMetad
     )
 }
 
-/// Creates FileInfo from Audio
 pub fn file_info_from_audio(audio: &Audio) -> (FileMeta, FileType, FileMetadata) {
     (
         audio.file.clone(),
@@ -244,7 +239,6 @@ pub fn file_info_from_audio(audio: &Audio) -> (FileMeta, FileType, FileMetadata)
     )
 }
 
-/// Creates FileInfo from Voice
 pub fn file_info_from_voice(voice: &Voice) -> (FileMeta, FileType, FileMetadata) {
     (
         voice.file.clone(),
@@ -259,7 +253,6 @@ pub fn file_info_from_voice(voice: &Voice) -> (FileMeta, FileType, FileMetadata)
     )
 }
 
-/// Creates FileInfo from Video
 pub fn file_info_from_video(video: &Video) -> (FileMeta, FileType, FileMetadata) {
     (
         video.file.clone(),
@@ -276,7 +269,6 @@ pub fn file_info_from_video(video: &Video) -> (FileMeta, FileType, FileMetadata)
     )
 }
 
-/// Creates FileInfo from VideoNote
 pub fn file_info_from_video_note(video_note: &VideoNote) -> (FileMeta, FileType, FileMetadata) {
     (
         video_note.file.clone(),
@@ -292,7 +284,6 @@ pub fn file_info_from_video_note(video_note: &VideoNote) -> (FileMeta, FileType,
     )
 }
 
-/// Creates FileInfo from Document
 pub fn file_info_from_document(document: &Document) -> (FileMeta, FileType, FileMetadata) {
     (
         document.file.clone(),
@@ -304,7 +295,6 @@ pub fn file_info_from_document(document: &Document) -> (FileMeta, FileType, File
     )
 }
 
-/// Creates FileInfo from Sticker
 pub fn file_info_from_sticker(sticker: &Sticker) -> (FileMeta, FileType, FileMetadata) {
     (
         sticker.file.clone(),
@@ -317,7 +307,6 @@ pub fn file_info_from_sticker(sticker: &Sticker) -> (FileMeta, FileType, FileMet
     )
 }
 
-/// Creates FileInfo from Animation
 pub fn file_info_from_animation(animation: &Animation) -> (FileMeta, FileType, FileMetadata) {
     (
         animation.file.clone(),
