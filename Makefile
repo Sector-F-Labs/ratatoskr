@@ -1,6 +1,6 @@
 # Makefile for Deno Telegram <-> Kafka (Redpanda) Bot
 
-.PHONY: help install setup run dev stop produce test_buttons test_image test_callback
+.PHONY: help install setup run dev stop produce test_buttons test_image test_callback install-service uninstall-service start-service stop-service status-service
 
 # Redpanda config
 KAFKA_BROKER=localhost:9092
@@ -15,8 +15,15 @@ help:
 	@echo "  main          Build the project with cargo"
 	@echo ""
 	@echo "Setup targets:"
-	@echo "  install       Install Redpanda using Homebrew"
+	@echo "  install       Install binary with cargo"
 	@echo "  setup         Start Redpanda and create topics"
+	@echo ""
+	@echo "Service targets:"
+	@echo "  install-service   Install ratatoskr as macOS LaunchAgent"
+	@echo "  uninstall-service Remove ratatoskr LaunchAgent"
+	@echo "  start-service     Start the ratatoskr service"
+	@echo "  stop-service      Stop the ratatoskr service"
+	@echo "  status-service    Check service status"
 	@echo ""
 	@echo "Runtime targets:"
 	@echo "  run           Run the bot"
@@ -82,3 +89,33 @@ push:
 		src scripts \
 		Makefile \
 		$(REMOTE_HOST):$(REMOTE_PATH)
+
+# Service management targets
+install-service: install
+	@echo "Installing ratatoskr as macOS LaunchAgent..."
+	@mkdir -p /usr/local/var/ratatoskr
+	@mkdir -p /usr/local/var/log
+	@cp scripts/com.sectorflabs.ratatoskr.plist ~/Library/LaunchAgents/
+	@echo "Service installed. Use 'make start-service' to start it."
+
+uninstall-service: stop-service
+	@echo "Uninstalling ratatoskr LaunchAgent..."
+	@rm -f ~/Library/LaunchAgents/com.sectorflabs.ratatoskr.plist
+	@echo "Service uninstalled."
+
+start-service:
+	@echo "Starting ratatoskr service..."
+	@launchctl load ~/Library/LaunchAgents/com.sectorflabs.ratatoskr.plist
+	@echo "Service started."
+
+stop-service:
+	@echo "Stopping ratatoskr service..."
+	@launchctl unload ~/Library/LaunchAgents/com.sectorflabs.ratatoskr.plist 2>/dev/null || true
+	@echo "Service stopped."
+
+status-service:
+	@echo "Checking ratatoskr service status..."
+	@launchctl list | grep com.sectorflabs.ratatoskr || echo "Service not running"
+	@echo ""
+	@echo "Recent logs:"
+	@tail -10 /usr/local/var/log/ratatoskr.log 2>/dev/null || echo "No logs found"
