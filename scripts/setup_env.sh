@@ -11,9 +11,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Check for required tools
-if ! command -v rpk &> /dev/null; then
-    echo -e "${RED}Error: rpk (Redpanda CLI) not found${NC}"
-    echo "Please install it with: brew install redpanda-data/tap/redpanda"
+if ! command -v kafka-topics &> /dev/null && ! command -v kafka-topics.sh &> /dev/null; then
+    echo -e "${RED}Error: Kafka command-line tools not found${NC}"
+    echo "Please install Kafka and ensure kafka-topics.sh is in your PATH"
+    echo "You can install with: brew install kafka"
+    echo "Or download from: https://kafka.apache.org/downloads"
     exit 1
 fi
 
@@ -21,6 +23,12 @@ if ! command -v jq &> /dev/null; then
     echo -e "${RED}Error: jq not found${NC}"
     echo "Please install it with: brew install jq (macOS) or apt install jq (Debian/Ubuntu)"
     exit 1
+fi
+
+# Determine which kafka command to use
+KAFKA_TOPICS_CMD="kafka-topics"
+if command -v kafka-topics.sh &> /dev/null; then
+    KAFKA_TOPICS_CMD="kafka-topics.sh"
 fi
 
 # Set default values for variables
@@ -51,11 +59,30 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     
     # Check if topics exist
     echo -e "\n${BLUE}Available Kafka Topics:${NC}"
-    rpk topic list --brokers $KAFKA_BROKER || {
+    $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --list || {
         echo -e "${RED}Failed to list Kafka topics${NC}"
         echo "Make sure Kafka is running at $KAFKA_BROKER"
         exit 1
     }
+    
+    # Create topics if they don't exist
+    echo -e "\n${BLUE}Checking/Creating required topics:${NC}"
+    
+    # Check if input topic exists
+    if ! $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --list | grep -q "^$KAFKA_IN_TOPIC$"; then
+        echo -e "Creating topic: ${YELLOW}$KAFKA_IN_TOPIC${NC}"
+        $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --create --topic $KAFKA_IN_TOPIC --partitions 1 --replication-factor 1
+    else
+        echo -e "Topic exists: ${GREEN}$KAFKA_IN_TOPIC${NC}"
+    fi
+    
+    # Check if output topic exists
+    if ! $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --list | grep -q "^$KAFKA_OUT_TOPIC$"; then
+        echo -e "Creating topic: ${YELLOW}$KAFKA_OUT_TOPIC${NC}"
+        $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --create --topic $KAFKA_OUT_TOPIC --partitions 1 --replication-factor 1
+    else
+        echo -e "Topic exists: ${GREEN}$KAFKA_OUT_TOPIC${NC}"
+    fi
     
     echo -e "\n${GREEN}Environment is ready for Ratatoskr scripts${NC}"
 fi

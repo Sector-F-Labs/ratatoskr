@@ -34,20 +34,17 @@ help:
 	@echo "  KAFKA_BROKER       - Kafka broker address (default: localhost:9092)"
 	@echo "  KAFKA_IN_TOPIC     - Input topic name"
 	@echo "  KAFKA_OUT_TOPIC    - Output topic name"
+	@echo "  REMOTE_HOST        - Remote host for pushpi (default: divanvisagie@heimdallr)"
+	@echo "  REMOTE_PATH        - Remote path for pushpi (default: ~/src/ratatoskr)"
 
 main:
 	cargo build
 
-# Install Redpanda natively (macOS/Linux with Homebrew)
 install:
-	brew install redpanda-data/tap/redpanda
+	cargo install --path .
 
-# Setup Redpanda natively and create topics
 setup:
-	rpk container start
-	rpk topic create $(KAFKA_IN_TOPIC) || true; \
-	rpk topic create $(KAFKA_OUT_TOPIC) || true; \
-	echo "Redpanda and topics are ready."
+	./scripts/setup_env.sh
 
 run:
 	cargo run
@@ -55,7 +52,7 @@ dev:
 	cargo watch -x run
 
 stop:
-	pkill -f "redpanda start" || true 
+	pkill -f "redpanda start" || true
 
 consume:
 	./scripts/consume.sh $(N)
@@ -75,8 +72,13 @@ test_all_message_types: test_text test_buttons test_image
 test_callback:
 	./scripts/simulate_callback.sh $(MESSAGE_ID) "$(CALLBACK_DATA)"
 
-pushpi:
+# Push to remote server (configurable via environment variables)
+REMOTE_HOST?=plan10
+REMOTE_PATH?=~/src/ratatoskr
+
+push:
 	rsync -av --delete \
 		Cargo.toml Cargo.lock \
 		src scripts \
-		divanvisagie@heimdallr:~/src/ratatoskr
+		Makefile \
+		$(REMOTE_HOST):$(REMOTE_PATH)
