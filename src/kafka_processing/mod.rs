@@ -14,6 +14,8 @@ use teloxide::{
     types::{InputFile, ParseMode},
 };
 
+pub mod outgoing;
+
 pub async fn start_kafka_consumer_loop(
     bot_consumer_clone: Bot,
     consumer: StreamConsumer,

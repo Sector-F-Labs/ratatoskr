@@ -1,14 +1,14 @@
-use crate::incoming::{FileInfo, FileMetadata, FileType};
 use crate::outgoing::{ButtonInfo, ReplyKeyboardMarkup};
+use crate::telegram_handler::incoming::{FileInfo, FileMetadata, FileType};
 use chrono::Utc;
 use std::error::Error;
 use std::path::Path;
 use teloxide::Bot;
 use teloxide::prelude::Requester;
 use teloxide::types::{
-    Animation, Audio, Document, FileMeta, InlineKeyboardButton, InlineKeyboardMarkup, PhotoSize,
-    Sticker, Video, VideoNote, Voice, KeyboardButton, KeyboardMarkup,
-    KeyboardButtonPollType, ButtonRequest,
+    Animation, Audio, ButtonRequest, Document, FileMeta, InlineKeyboardButton,
+    InlineKeyboardMarkup, KeyboardButton, KeyboardButtonPollType, KeyboardMarkup, PhotoSize,
+    Sticker, Video, VideoNote, Voice,
 };
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -28,35 +28,41 @@ pub fn create_markup(buttons_opt: &Option<Vec<Vec<ButtonInfo>>>) -> Option<Inlin
 
 pub fn create_reply_keyboard(keyboard_opt: &Option<ReplyKeyboardMarkup>) -> Option<KeyboardMarkup> {
     keyboard_opt.as_ref().map(|keyboard| {
-        let keyboard_buttons: Vec<Vec<KeyboardButton>> = keyboard.keyboard.iter().map(|row| {
-            row.iter().map(|button| {
-                let mut kb_button = KeyboardButton::new(button.text.clone());
-                
-                if let Some(true) = button.request_contact {
-                    kb_button = kb_button.request(ButtonRequest::Contact);
-                }
-                
-                if let Some(true) = button.request_location {
-                    kb_button = kb_button.request(ButtonRequest::Location);
-                }
-                
-                if let Some(poll) = &button.request_poll {
-                    let poll_type = match poll.poll_type.as_deref() {
-                        Some("quiz") => KeyboardButtonPollType::Quiz,
-                        Some("regular") => KeyboardButtonPollType::Regular,
-                        _ => KeyboardButtonPollType::Regular,
-                    };
-                    kb_button = kb_button.request(ButtonRequest::Poll(poll_type));
-                }
-                
-                if let Some(_web_app) = &button.web_app {
-                    // Note: WebApp functionality requires additional setup
-                    // For now, we'll skip web app buttons
-                }
-                
-                kb_button
-            }).collect()
-        }).collect();
+        let keyboard_buttons: Vec<Vec<KeyboardButton>> = keyboard
+            .keyboard
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|button| {
+                        let mut kb_button = KeyboardButton::new(button.text.clone());
+
+                        if let Some(true) = button.request_contact {
+                            kb_button = kb_button.request(ButtonRequest::Contact);
+                        }
+
+                        if let Some(true) = button.request_location {
+                            kb_button = kb_button.request(ButtonRequest::Location);
+                        }
+
+                        if let Some(poll) = &button.request_poll {
+                            let poll_type = match poll.poll_type.as_deref() {
+                                Some("quiz") => KeyboardButtonPollType::Quiz,
+                                Some("regular") => KeyboardButtonPollType::Regular,
+                                _ => KeyboardButtonPollType::Regular,
+                            };
+                            kb_button = kb_button.request(ButtonRequest::Poll(poll_type));
+                        }
+
+                        if let Some(_web_app) = &button.web_app {
+                            // Note: WebApp functionality requires additional setup
+                            // For now, we'll skip web app buttons
+                        }
+
+                        kb_button
+                    })
+                    .collect()
+            })
+            .collect();
 
         let mut reply_keyboard = KeyboardMarkup::new(keyboard_buttons);
 

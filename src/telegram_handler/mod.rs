@@ -1,16 +1,17 @@
+use crate::structs::{ImageStorageDir, KafkaInTopic};
+use crate::utils::{
+    download_file, file_info_from_animation, file_info_from_audio, file_info_from_document,
+    file_info_from_photo, file_info_from_sticker, file_info_from_video, file_info_from_video_note,
+    file_info_from_voice, select_best_photo,
+};
+use incoming::{FileInfo, IncomingMessage};
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use std::error::Error;
 use std::sync::Arc;
 use teloxide::prelude::{Bot, CallbackQuery, Message, Requester};
 use teloxide::types::MessageReactionUpdated;
-use crate::utils::{
-    download_file, select_best_photo, file_info_from_photo, file_info_from_audio, 
-    file_info_from_voice, file_info_from_video, file_info_from_video_note, 
-    file_info_from_document, file_info_from_sticker, file_info_from_animation
-};
-use crate::structs::{KafkaInTopic, ImageStorageDir};
-use crate::incoming::{FileInfo, IncomingMessage};
 
+pub mod incoming;
 
 pub async fn message_handler(
     bot: Bot,
@@ -21,20 +22,30 @@ pub async fn message_handler(
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Handle file downloads for all supported file types
     let mut downloaded_files: Vec<FileInfo> = Vec::new();
-    
+
     // Handle photos
     if let Some(photos) = msg.photo() {
         if let Some(best_photo) = select_best_photo(photos) {
             let (file, file_type, metadata) = file_info_from_photo(best_photo);
             tracing::info!(
-                message_id = %msg.id.0, 
-                chat_id = %msg.chat.id.0, 
+                message_id = %msg.id.0,
+                chat_id = %msg.chat.id.0,
                 file_id = %file.id,
                 file_type = "photo",
                 "Downloading file from Telegram message"
             );
-            
-            match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+
+            match download_file(
+                &bot,
+                &file,
+                file_type,
+                metadata,
+                &image_storage_dir.0,
+                msg.chat.id.0,
+                msg.id.0,
+            )
+            .await
+            {
                 Ok(file_info) => {
                     downloaded_files.push(file_info);
                 }
@@ -50,19 +61,29 @@ pub async fn message_handler(
             }
         }
     }
-    
+
     // Handle audio
     if let Some(audio) = &msg.audio() {
         let (file, file_type, metadata) = file_info_from_audio(audio);
         tracing::info!(
-            message_id = %msg.id.0, 
-            chat_id = %msg.chat.id.0, 
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
             file_id = %file.id,
             file_type = "audio",
             "Downloading file from Telegram message"
         );
-        
-        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+
+        match download_file(
+            &bot,
+            &file,
+            file_type,
+            metadata,
+            &image_storage_dir.0,
+            msg.chat.id.0,
+            msg.id.0,
+        )
+        .await
+        {
             Ok(file_info) => {
                 downloaded_files.push(file_info);
             }
@@ -77,19 +98,29 @@ pub async fn message_handler(
             }
         }
     }
-    
+
     // Handle voice
     if let Some(voice) = &msg.voice() {
         let (file, file_type, metadata) = file_info_from_voice(voice);
         tracing::info!(
-            message_id = %msg.id.0, 
-            chat_id = %msg.chat.id.0, 
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
             file_id = %file.id,
             file_type = "voice",
             "Downloading file from Telegram message"
         );
-        
-        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+
+        match download_file(
+            &bot,
+            &file,
+            file_type,
+            metadata,
+            &image_storage_dir.0,
+            msg.chat.id.0,
+            msg.id.0,
+        )
+        .await
+        {
             Ok(file_info) => {
                 downloaded_files.push(file_info);
             }
@@ -104,19 +135,29 @@ pub async fn message_handler(
             }
         }
     }
-    
+
     // Handle video
     if let Some(video) = &msg.video() {
         let (file, file_type, metadata) = file_info_from_video(video);
         tracing::info!(
-            message_id = %msg.id.0, 
-            chat_id = %msg.chat.id.0, 
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
             file_id = %file.id,
             file_type = "video",
             "Downloading file from Telegram message"
         );
-        
-        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+
+        match download_file(
+            &bot,
+            &file,
+            file_type,
+            metadata,
+            &image_storage_dir.0,
+            msg.chat.id.0,
+            msg.id.0,
+        )
+        .await
+        {
             Ok(file_info) => {
                 downloaded_files.push(file_info);
             }
@@ -131,19 +172,29 @@ pub async fn message_handler(
             }
         }
     }
-    
+
     // Handle video note
     if let Some(video_note) = &msg.video_note() {
         let (file, file_type, metadata) = file_info_from_video_note(video_note);
         tracing::info!(
-            message_id = %msg.id.0, 
-            chat_id = %msg.chat.id.0, 
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
             file_id = %file.id,
             file_type = "video_note",
             "Downloading file from Telegram message"
         );
-        
-        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+
+        match download_file(
+            &bot,
+            &file,
+            file_type,
+            metadata,
+            &image_storage_dir.0,
+            msg.chat.id.0,
+            msg.id.0,
+        )
+        .await
+        {
             Ok(file_info) => {
                 downloaded_files.push(file_info);
             }
@@ -158,19 +209,29 @@ pub async fn message_handler(
             }
         }
     }
-    
+
     // Handle document
     if let Some(document) = &msg.document() {
         let (file, file_type, metadata) = file_info_from_document(document);
         tracing::info!(
-            message_id = %msg.id.0, 
-            chat_id = %msg.chat.id.0, 
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
             file_id = %file.id,
             file_type = "document",
             "Downloading file from Telegram message"
         );
-        
-        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+
+        match download_file(
+            &bot,
+            &file,
+            file_type,
+            metadata,
+            &image_storage_dir.0,
+            msg.chat.id.0,
+            msg.id.0,
+        )
+        .await
+        {
             Ok(file_info) => {
                 downloaded_files.push(file_info);
             }
@@ -185,19 +246,29 @@ pub async fn message_handler(
             }
         }
     }
-    
+
     // Handle sticker
     if let Some(sticker) = &msg.sticker() {
         let (file, file_type, metadata) = file_info_from_sticker(sticker);
         tracing::info!(
-            message_id = %msg.id.0, 
-            chat_id = %msg.chat.id.0, 
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
             file_id = %file.id,
             file_type = "sticker",
             "Downloading file from Telegram message"
         );
-        
-        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+
+        match download_file(
+            &bot,
+            &file,
+            file_type,
+            metadata,
+            &image_storage_dir.0,
+            msg.chat.id.0,
+            msg.id.0,
+        )
+        .await
+        {
             Ok(file_info) => {
                 downloaded_files.push(file_info);
             }
@@ -212,19 +283,29 @@ pub async fn message_handler(
             }
         }
     }
-    
+
     // Handle animation
     if let Some(animation) = &msg.animation() {
         let (file, file_type, metadata) = file_info_from_animation(animation);
         tracing::info!(
-            message_id = %msg.id.0, 
-            chat_id = %msg.chat.id.0, 
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
             file_id = %file.id,
             file_type = "animation",
             "Downloading file from Telegram message"
         );
-        
-        match download_file(&bot, &file, file_type, metadata, &image_storage_dir.0, msg.chat.id.0, msg.id.0).await {
+
+        match download_file(
+            &bot,
+            &file,
+            file_type,
+            metadata,
+            &image_storage_dir.0,
+            msg.chat.id.0,
+            msg.id.0,
+        )
+        .await
+        {
             Ok(file_info) => {
                 downloaded_files.push(file_info);
             }
@@ -257,10 +338,10 @@ pub async fn message_handler(
     };
 
     tracing::info!(
-        topic = %kafka_in_topic.0, 
-        key = "message", 
-        message_id = %msg.id.0, 
-        chat_id = %msg.chat.id.0, 
+        topic = %kafka_in_topic.0,
+        key = "message",
+        message_id = %msg.id.0,
+        chat_id = %msg.chat.id.0,
         has_files = %(!downloaded_files.is_empty()),
         file_count = %downloaded_files.len(),
         "Sending Telegram message to Kafka"
@@ -287,20 +368,28 @@ pub async fn message_reaction_handler(
     let message_id = reaction.message_id.0;
     let user_id = reaction.actor.user().map(|u| u.id.0);
     let date = reaction.date;
-    
+
     // Convert reaction types to strings
-    let old_reaction: Vec<String> = reaction.old_reaction.iter()
+    let old_reaction: Vec<String> = reaction
+        .old_reaction
+        .iter()
         .map(|r| match r {
             teloxide::types::ReactionType::Emoji { emoji } => emoji.clone(),
-            teloxide::types::ReactionType::CustomEmoji { custom_emoji_id } => format!("custom:{}", custom_emoji_id),
+            teloxide::types::ReactionType::CustomEmoji { custom_emoji_id } => {
+                format!("custom:{}", custom_emoji_id)
+            }
             teloxide::types::ReactionType::Paid => "paid".to_string(),
         })
         .collect();
-        
-    let new_reaction: Vec<String> = reaction.new_reaction.iter()
+
+    let new_reaction: Vec<String> = reaction
+        .new_reaction
+        .iter()
         .map(|r| match r {
             teloxide::types::ReactionType::Emoji { emoji } => emoji.clone(),
-            teloxide::types::ReactionType::CustomEmoji { custom_emoji_id } => format!("custom:{}", custom_emoji_id),
+            teloxide::types::ReactionType::CustomEmoji { custom_emoji_id } => {
+                format!("custom:{}", custom_emoji_id)
+            }
             teloxide::types::ReactionType::Paid => "paid".to_string(),
         })
         .collect();
@@ -341,7 +430,7 @@ pub async fn message_reaction_handler(
         user_id = ?user_id,
         "Sending message reaction to Kafka"
     );
-    
+
     let record = FutureRecord::to(kafka_in_topic.0.as_str())
         .payload(&json)
         .key("message_reaction");
