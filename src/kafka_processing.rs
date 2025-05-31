@@ -1,5 +1,5 @@
 use crate::outgoing::{OutgoingMessage, OutgoingMessageType};
-use crate::utils::create_markup;
+use crate::utils::{create_markup, create_reply_keyboard};
 use futures_util::StreamExt;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message as KafkaMessageRd;
@@ -74,6 +74,10 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(markup);
             }
 
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+            }
+
             msg_to_send.await?;
         }
 
@@ -93,6 +97,10 @@ async fn handle_outgoing_message(
 
             if let Some(markup) = create_markup(&data.buttons) {
                 msg_to_send = msg_to_send.reply_markup(markup);
+            }
+
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
             msg_to_send.await?;
@@ -128,6 +136,10 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(markup);
             }
 
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+            }
+
             msg_to_send.await?;
         }
 
@@ -151,6 +163,10 @@ async fn handle_outgoing_message(
 
             if let Some(markup) = create_markup(&data.buttons) {
                 msg_to_send = msg_to_send.reply_markup(markup);
+            }
+
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
             msg_to_send.await?;
@@ -190,6 +206,10 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(markup);
             }
 
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+            }
+
             msg_to_send.await?;
         }
 
@@ -215,6 +235,10 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(markup);
             }
 
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+            }
+
             msg_to_send.await?;
         }
 
@@ -230,6 +254,10 @@ async fn handle_outgoing_message(
 
             if let Some(markup) = create_markup(&data.buttons) {
                 msg_to_send = msg_to_send.reply_markup(markup);
+            }
+
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
             msg_to_send.await?;
@@ -265,6 +293,10 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(markup);
             }
 
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+            }
+
             msg_to_send.await?;
         }
 
@@ -289,6 +321,10 @@ async fn handle_outgoing_message(
 
             if let Some(markup) = create_markup(&data.buttons) {
                 msg_to_send = msg_to_send.reply_markup(markup);
+            }
+
+            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
             msg_to_send.await?;

@@ -35,6 +35,8 @@ help:
 	@echo "  test_buttons  Send message with buttons (TEXT=\"your message\")"
 	@echo "  test_image    Send image message (IMAGE_PATH=path CAPTION=\"caption\")"
 	@echo "  test_callback Simulate callback (MESSAGE_ID=123 CALLBACK_DATA=\"data\")"
+	@echo "  test_keyboard Send message with reply keyboard (TEXT=\"your message\")"
+	@echo "  test_location Send location request with reply keyboard"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  CHAT_ID            - Target Telegram chat ID (required for testing)"
@@ -78,6 +80,12 @@ test_all_message_types: test_text test_buttons test_image
 
 test_callback:
 	./scripts/simulate_callback.sh $(MESSAGE_ID) "$(CALLBACK_DATA)"
+
+test_keyboard:
+	./scripts/produce_reply_keyboard.sh "$(TEXT)"
+
+test_location:
+	./scripts/produce_location_request.sh "$(TEXT)"
 
 # Push to remote server (configurable via environment variables)
 REMOTE_HOST?=plan10
