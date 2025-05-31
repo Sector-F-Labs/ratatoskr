@@ -4,7 +4,7 @@ This directory contains scripts for testing different message types with Ratatos
 
 ## Prerequisites
 
-- [Redpanda CLI (`rpk`)](https://docs.redpanda.com/docs/reference/rpk-commands/) or Kafka CLI tools
+- Kafka CLI tools (`kafka-console-producer`, `kafka-topics`, etc.)
 - `jq` for JSON formatting (install with `brew install jq` on macOS or `apt install jq` on Debian/Ubuntu)
 - Environment variable `CHAT_ID` set to your Telegram chat ID
 
@@ -68,7 +68,7 @@ export CHAT_ID=123456789
 
 ## Monitoring Messages
 
-Use the Redpanda Console UI to monitor Kafka topics instead of command-line scripts. The console provides a better interface for viewing message contents and topic activity.
+Use Kafka monitoring tools or web UIs to monitor Kafka topics instead of command-line scripts. Tools like Kafka UI, Kafdrop, or the command-line `kafka-console-consumer` provide interfaces for viewing message contents and topic activity.
 
 ## Making Scripts Executable
 

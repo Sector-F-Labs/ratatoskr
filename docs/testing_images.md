@@ -9,7 +9,7 @@ This document explains how to test image message functionality in Ratatoskr usin
    export CHAT_ID=123456789  # Replace with your actual chat ID
    ```
 
-2. Ensure Redpanda is running and topics are created:
+2. Ensure Kafka is running and topics are created:
    ```bash
    make setup
    ```

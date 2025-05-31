@@ -1,52 +1,17 @@
-version: '3'
-
 services:
-  ratatoskr:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ratatoskr
-    restart: unless-stopped
-    environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - KAFKA_BROKER=kafka:9092
-      - KAFKA_IN_TOPIC=${KAFKA_IN_TOPIC:-com.sectorflabs.ratatoskr.in}
-      - KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-com.sectorflabs.ratatoskr.out}
-    depends_on:
-      - kafka
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.2
-    container_name: zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    restart: unless-stopped
-
-  kafka:
-    image: confluentinc/cp-kafka:7.3.2
-    container_name: kafka
-    depends_on:
-      - zookeeper
+  kafkahq:
+    image: tchiotludo/akhq:0.24.0
+    platform: linux/amd64
+    container_name: kafkahq
     ports:
-      - "9092:9092"
+      - "8080:8080"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      AKHQ_CONFIGURATION: |
+        akhq:
+          connections:
+            docker-kafka-server:
+              properties:
+                bootstrap.servers: "192.168.0.55:9092"
     restart: unless-stopped
-
-  kafdrop:
-    image: obsidiandynamics/kafdrop:latest
-    container_name: kafdrop
-    depends_on:
-      - kafka
-    ports:
-      - "9000:9000"
-    environment:
-      KAFKA_BROKERCONNECT: kafka:9092
-      JVM_OPTS: "-Xms32M -Xmx64M"
-    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

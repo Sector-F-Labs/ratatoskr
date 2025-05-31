@@ -1,8 +1,8 @@
-# Makefile for Deno Telegram <-> Kafka (Redpanda) Bot
+# Makefile for Deno Telegram <-> Kafka Bot
 
 .PHONY: help install setup run dev stop produce test_buttons test_image test_callback install-service uninstall-service start-service stop-service status-service
 
-# Redpanda config
+# Kafka config
 KAFKA_BROKER=localhost:9092
 KAFKA_IN_TOPIC?=com.sectorflabs.ratatoskr.in
 KAFKA_OUT_TOPIC?=com.sectorflabs.ratatoskr.out
@@ -16,7 +16,7 @@ help:
 	@echo ""
 	@echo "Setup targets:"
 	@echo "  install       Install binary with cargo"
-	@echo "  setup         Start Redpanda and create topics"
+	@echo "  setup         Start Kafka and create topics"
 	@echo ""
 	@echo "Service targets:"
 	@echo "  install-service   Install ratatoskr as macOS LaunchAgent"
@@ -28,7 +28,7 @@ help:
 	@echo "Runtime targets:"
 	@echo "  run           Run the bot"
 	@echo "  dev           Run the bot with auto-reload (cargo watch)"
-	@echo "  stop          Stop Redpanda container"
+	@echo "  stop          Stop Kafka container"
 	@echo ""
 	@echo "Testing targets:"
 	@echo "  produce       Send text message (TEXT=\"your message\")"
@@ -59,7 +59,7 @@ dev:
 	cargo watch -x run
 
 stop:
-	pkill -f "redpanda start" || true
+	pkill -f "kafka" || true
 
 consume:
 	./scripts/consume.sh $(N)

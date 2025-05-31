@@ -30,9 +30,9 @@ KEY="callback_query"
 echo "Simulating callback query to $KAFKA_IN_TOPIC:"
 cat "$TMP_FILE" | jq 2>/dev/null || cat "$TMP_FILE"
 
-# Use rpk to produce the message with the specified key
-# Compact the JSON to a single line to avoid rpk treating each line as separate message
-cat "$TMP_FILE" | jq -c . | rpk topic produce $KAFKA_IN_TOPIC --brokers $KAFKA_BROKER -k "$KEY"
+# Use kafka-console-producer to produce the message with the specified key
+# Compact the JSON to a single line to avoid kafka-console-producer treating each line as separate message
+echo "$KEY:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_IN_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 # Clean up
 rm "$TMP_FILE"
