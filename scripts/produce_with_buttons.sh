@@ -18,7 +18,31 @@ TMP_FILE=$(mktemp)
 
 # Write the correctly formatted JSON to the temporary file
 cat > "$TMP_FILE" << EOF
-{"chat_id":$CHAT_ID,"text":"$MESSAGE_TEXT","buttons":[[{"text":"Button 1","callback_data":"button1_action"},{"text":"Button 2","callback_data":"button2_action"}],[{"text":"Button 3","callback_data":"button3_action"}]]}
+{
+  "message_type": {
+    "type": "TextMessage",
+    "data": {
+      "text": "$MESSAGE_TEXT",
+      "buttons": [
+        [
+          {"text": "Button 1", "callback_data": "button1_action"},
+          {"text": "Button 2", "callback_data": "button2_action"}
+        ],
+        [
+          {"text": "Button 3", "callback_data": "button3_action"}
+        ]
+      ],
+      "parse_mode": null,
+      "disable_web_page_preview": false
+    }
+  },
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "target": {
+    "platform": "telegram",
+    "chat_id": $CHAT_ID,
+    "thread_id": null
+  }
+}
 EOF
 
 # Display the message being sent
