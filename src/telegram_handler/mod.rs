@@ -16,8 +16,8 @@ pub mod incoming;
 pub async fn message_handler(
     bot: Bot,
     msg: Message,
-    producer: Arc<FutureProducer>,
-    kafka_in_topic: KafkaInTopic,
+    producer: Option<Arc<FutureProducer>>,
+    kafka_in_topic: Option<KafkaInTopic>,
     image_storage_dir: ImageStorageDir,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Handle file downloads for all supported file types
@@ -329,30 +329,40 @@ pub async fn message_handler(
         None, // bot_username - could be retrieved from bot.get_me() if needed
     );
 
-    let json = match serde_json::to_string(&incoming_msg) {
-        Ok(json_string) => json_string,
-        Err(e) => {
-            tracing::error!(message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to serialize IncomingMessage to JSON");
+    if let (Some(ref actual_producer), Some(ref actual_kafka_in_topic)) = (producer, kafka_in_topic) {
+        let json = match serde_json::to_string(&incoming_msg) {
+            Ok(json_string) => json_string,
+            Err(e) => {
+                tracing::error!(message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to serialize IncomingMessage to JSON");
+                return Err(Box::new(e));
+            }
+        };
+
+        tracing::info!(
+            topic = %actual_kafka_in_topic.0,
+            key = "message",
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            has_files = %(!downloaded_files.is_empty()),
+            file_count = %downloaded_files.len(),
+            "Sending Telegram message to Kafka"
+        );
+        let record = FutureRecord::to(actual_kafka_in_topic.0.as_str())
+            .payload(&json)
+            .key("message");
+
+        if let Err((e, _)) = actual_producer.send(record, None).await {
+            tracing::error!(topic = %actual_kafka_in_topic.0, key = "message", message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to send message to Kafka");
             return Err(Box::new(e));
         }
-    };
-
-    tracing::info!(
-        topic = %kafka_in_topic.0,
-        key = "message",
-        message_id = %msg.id.0,
-        chat_id = %msg.chat.id.0,
-        has_files = %(!downloaded_files.is_empty()),
-        file_count = %downloaded_files.len(),
-        "Sending Telegram message to Kafka"
-    );
-    let record = FutureRecord::to(kafka_in_topic.0.as_str())
-        .payload(&json)
-        .key("message");
-
-    if let Err((e, _)) = producer.send(record, None).await {
-        tracing::error!(topic = %kafka_in_topic.0, key = "message", message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to send message to Kafka");
-        return Err(Box::new(e));
+    } else {
+        tracing::info!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            has_files = %(!downloaded_files.is_empty()),
+            file_count = %downloaded_files.len(),
+            "Kafka streaming disabled. Message processed, files downloaded (if any), but not sent to Kafka."
+        );
     }
     Ok(())
 }
@@ -360,8 +370,8 @@ pub async fn message_handler(
 pub async fn message_reaction_handler(
     _bot: Bot,
     reaction: MessageReactionUpdated,
-    producer: Arc<FutureProducer>,
-    kafka_in_topic: KafkaInTopic,
+    producer: Option<Arc<FutureProducer>>,
+    kafka_in_topic: Option<KafkaInTopic>,
     _image_storage_dir: ImageStorageDir,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let chat_id = reaction.chat.id.0;
@@ -414,30 +424,39 @@ pub async fn message_reaction_handler(
         None, // bot_username - could be retrieved from bot.get_me() if needed
     );
 
-    let json = match serde_json::to_string(&incoming_msg) {
-        Ok(json_string) => json_string,
-        Err(e) => {
-            tracing::error!(chat_id = %chat_id, message_id = %message_id, error = %e, "Failed to serialize message reaction to JSON");
+    if let (Some(ref actual_producer), Some(ref actual_kafka_in_topic)) = (producer, kafka_in_topic) {
+        let json = match serde_json::to_string(&incoming_msg) {
+            Ok(json_string) => json_string,
+            Err(e) => {
+                tracing::error!(chat_id = %chat_id, message_id = %message_id, error = %e, "Failed to serialize message reaction to JSON");
+                return Err(Box::new(e));
+            }
+        };
+
+        tracing::info!(
+            topic = %actual_kafka_in_topic.0,
+            key = "message_reaction",
+            chat_id = %chat_id,
+            message_id = %message_id,
+            user_id = ?user_id,
+            "Sending message reaction to Kafka"
+        );
+
+        let record = FutureRecord::to(actual_kafka_in_topic.0.as_str())
+            .payload(&json)
+            .key("message_reaction");
+
+        if let Err((e, _)) = actual_producer.send(record, None).await {
+            tracing::error!(topic = %actual_kafka_in_topic.0, key = "message_reaction", chat_id = %chat_id, message_id = %message_id, error = %e, "Failed to send message reaction to Kafka");
             return Err(Box::new(e));
         }
-    };
-
-    tracing::info!(
-        topic = %kafka_in_topic.0,
-        key = "message_reaction",
-        chat_id = %chat_id,
-        message_id = %message_id,
-        user_id = ?user_id,
-        "Sending message reaction to Kafka"
-    );
-
-    let record = FutureRecord::to(kafka_in_topic.0.as_str())
-        .payload(&json)
-        .key("message_reaction");
-
-    if let Err((e, _)) = producer.send(record, None).await {
-        tracing::error!(topic = %kafka_in_topic.0, key = "message_reaction", chat_id = %chat_id, message_id = %message_id, error = %e, "Failed to send message reaction to Kafka");
-        return Err(Box::new(e));
+    } else {
+        tracing::info!(
+            chat_id = %chat_id,
+            message_id = %message_id,
+            user_id = ?user_id,
+            "Kafka streaming disabled. Message reaction processed but not sent to Kafka."
+        );
     }
 
     Ok(())
@@ -446,8 +465,8 @@ pub async fn message_reaction_handler(
 pub async fn callback_query_handler(
     bot: Bot,
     query: CallbackQuery,
-    producer: Arc<FutureProducer>,
-    kafka_in_topic: KafkaInTopic,
+    producer: Option<Arc<FutureProducer>>,
+    kafka_in_topic: Option<KafkaInTopic>,
     _image_storage_dir: ImageStorageDir,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let user_id = query.from.id.0;
@@ -472,22 +491,31 @@ pub async fn callback_query_handler(
         None, // bot_username - could be retrieved from bot.get_me() if needed
     );
 
-    let json = match serde_json::to_string(&incoming_msg) {
-        Ok(json_string) => json_string,
-        Err(e) => {
-            tracing::error!(callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to serialize IncomingMessage to JSON");
+    if let (Some(ref actual_producer), Some(ref actual_kafka_in_topic)) = (producer, kafka_in_topic) {
+        let json = match serde_json::to_string(&incoming_msg) {
+            Ok(json_string) => json_string,
+            Err(e) => {
+                tracing::error!(callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to serialize IncomingMessage to JSON");
+                return Err(Box::new(e));
+            }
+        };
+
+        tracing::info!(topic = %actual_kafka_in_topic.0, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, "Sending callback data to Kafka");
+        let record = FutureRecord::to(actual_kafka_in_topic.0.as_str())
+            .payload(&json)
+            .key("callback_query");
+
+        if let Err((e, _)) = actual_producer.send(record, None).await {
+            tracing::error!(topic = %actual_kafka_in_topic.0, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to send callback data to Kafka");
             return Err(Box::new(e));
         }
-    };
-
-    tracing::info!(topic = %kafka_in_topic.0, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, "Sending callback data to Kafka");
-    let record = FutureRecord::to(kafka_in_topic.0.as_str())
-        .payload(&json)
-        .key("callback_query");
-
-    if let Err((e, _)) = producer.send(record, None).await {
-        tracing::error!(topic = %kafka_in_topic.0, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to send callback data to Kafka");
-        return Err(Box::new(e));
+    } else {
+        tracing::info!(
+            callback_query_id = %query_id,
+            user_id = %user_id,
+            callback_data = %data,
+            "Kafka streaming disabled. Callback query answered but not sent to Kafka."
+        );
     }
 
     Ok(())
