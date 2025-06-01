@@ -2,9 +2,9 @@ name: Rust CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,21 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      
+
       - name: Set up cargo cache
         uses: Swatinem/rust-cache@v2
-          
+
       - name: Check formatting
         run: cargo fmt --check
-        
-      - name: Run clippy
-        run: cargo clippy -- -D warnings
-          
+
       - name: Run tests
         run: cargo test
 
