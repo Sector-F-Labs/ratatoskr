@@ -4,8 +4,9 @@ use crate::utils::{
     file_info_from_photo, file_info_from_sticker, file_info_from_video, file_info_from_video_note,
     file_info_from_voice, select_best_photo,
 };
-use incoming::{FileInfo, IncomingMessage};
-use rdkafka::producer::{FutureProducer, FutureRecord};
+use crate::messaging::MessageSystem; // Added
+use crate::telegram_handler::incoming::IncomingMessage as UnifiedIncomingMessage; // Renamed for clarity if needed, or use existing
+use incoming::{FileInfo, IncomingMessage}; // Assuming IncomingMessage is the one we need for publishing
 use std::error::Error;
 use std::sync::Arc;
 use teloxide::prelude::{Bot, CallbackQuery, Message, Requester};
@@ -13,13 +14,16 @@ use teloxide::types::MessageReactionUpdated;
 
 pub mod incoming;
 
-pub async fn message_handler(
+pub async fn message_handler<MS>(
     bot: Bot,
     msg: Message,
-    producer: Arc<FutureProducer>,
-    kafka_in_topic: KafkaInTopic,
+    message_system: Arc<MS>,
+    kafka_in_topic: KafkaInTopic, // This might become part of MS config or removed if MS knows its publish topic
     image_storage_dir: ImageStorageDir,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<(), Box<dyn Error + Send + Sync>>
+where
+    MS: MessageSystem<PublishMessage = IncomingMessage> + 'static, // Specify PublishMessage type
+{
     // Handle file downloads for all supported file types
     let mut downloaded_files: Vec<FileInfo> = Vec::new();
 
@@ -329,41 +333,44 @@ pub async fn message_handler(
         None, // bot_username - could be retrieved from bot.get_me() if needed
     );
 
-    let json = match serde_json::to_string(&incoming_msg) {
-        Ok(json_string) => json_string,
-        Err(e) => {
-            tracing::error!(message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to serialize IncomingMessage to JSON");
-            return Err(Box::new(e));
-        }
-    };
-
+    // The MessageSystem's publish method handles serialization.
+    // The topic is also handled by the MessageSystem implementation (e.g., KafkaAdapter's produce_topic config)
     tracing::info!(
-        topic = %kafka_in_topic.0,
-        key = "message",
         message_id = %msg.id.0,
         chat_id = %msg.chat.id.0,
         has_files = %(!downloaded_files.is_empty()),
         file_count = %downloaded_files.len(),
-        "Sending Telegram message to Kafka"
+        "Publishing Telegram message via MessageSystem"
     );
-    let record = FutureRecord::to(kafka_in_topic.0.as_str())
-        .payload(&json)
-        .key("message");
 
-    if let Err((e, _)) = producer.send(record, None).await {
-        tracing::error!(topic = %kafka_in_topic.0, key = "message", message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to send message to Kafka");
-        return Err(Box::new(e));
+    if let Err(e) = message_system.publish(&incoming_msg).await {
+        tracing::error!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            error = ?e, // Use ?e for rich error display if available
+            "Failed to publish message via MessageSystem"
+        );
+        // Convert MS::Error to Box<dyn Error + Send + Sync>
+        // This conversion might need to be more sophisticated depending on MS::Error.
+        // For now, a simple to_string() and then boxing it.
+        // A better way would be to ensure MS::Error itself is Box<dyn Error + Send + Sync>
+        // or provide a conversion.
+        return Err(format!("Publishing error: {}", e).into());
     }
+
     Ok(())
 }
 
-pub async fn message_reaction_handler(
+pub async fn message_reaction_handler<MS>(
     _bot: Bot,
     reaction: MessageReactionUpdated,
-    producer: Arc<FutureProducer>,
-    kafka_in_topic: KafkaInTopic,
+    message_system: Arc<MS>,
+    kafka_in_topic: KafkaInTopic, // This might become part of MS config or removed
     _image_storage_dir: ImageStorageDir,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<(), Box<dyn Error + Send + Sync>>
+where
+    MS: MessageSystem<PublishMessage = IncomingMessage> + 'static,
+{
     let chat_id = reaction.chat.id.0;
     let message_id = reaction.message_id.0;
     let user_id = reaction.actor.user().map(|u| u.id.0);
@@ -414,42 +421,36 @@ pub async fn message_reaction_handler(
         None, // bot_username - could be retrieved from bot.get_me() if needed
     );
 
-    let json = match serde_json::to_string(&incoming_msg) {
-        Ok(json_string) => json_string,
-        Err(e) => {
-            tracing::error!(chat_id = %chat_id, message_id = %message_id, error = %e, "Failed to serialize message reaction to JSON");
-            return Err(Box::new(e));
-        }
-    };
-
     tracing::info!(
-        topic = %kafka_in_topic.0,
-        key = "message_reaction",
         chat_id = %chat_id,
         message_id = %message_id,
         user_id = ?user_id,
-        "Sending message reaction to Kafka"
+        "Publishing message reaction via MessageSystem"
     );
 
-    let record = FutureRecord::to(kafka_in_topic.0.as_str())
-        .payload(&json)
-        .key("message_reaction");
-
-    if let Err((e, _)) = producer.send(record, None).await {
-        tracing::error!(topic = %kafka_in_topic.0, key = "message_reaction", chat_id = %chat_id, message_id = %message_id, error = %e, "Failed to send message reaction to Kafka");
-        return Err(Box::new(e));
+    if let Err(e) = message_system.publish(&incoming_msg).await {
+        tracing::error!(
+            chat_id = %chat_id,
+            message_id = %message_id,
+            error = ?e,
+            "Failed to publish message reaction via MessageSystem"
+        );
+        return Err(format!("Publishing error: {}", e).into());
     }
 
     Ok(())
 }
 
-pub async fn callback_query_handler(
+pub async fn callback_query_handler<MS>(
     bot: Bot,
     query: CallbackQuery,
-    producer: Arc<FutureProducer>,
-    kafka_in_topic: KafkaInTopic,
+    message_system: Arc<MS>,
+    kafka_in_topic: KafkaInTopic, // This might become part of MS config or removed
     _image_storage_dir: ImageStorageDir,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+) -> Result<(), Box<dyn Error + Send + Sync>>
+where
+    MS: MessageSystem<PublishMessage = IncomingMessage> + 'static,
+{
     let user_id = query.from.id.0;
     let query_id = query.id.clone();
     let data = query.data.as_deref().unwrap_or_default();
@@ -472,22 +473,16 @@ pub async fn callback_query_handler(
         None, // bot_username - could be retrieved from bot.get_me() if needed
     );
 
-    let json = match serde_json::to_string(&incoming_msg) {
-        Ok(json_string) => json_string,
-        Err(e) => {
-            tracing::error!(callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to serialize IncomingMessage to JSON");
-            return Err(Box::new(e));
-        }
-    };
+    tracing::info!(callback_query_id = %query_id, user_id = %user_id, "Publishing callback data via MessageSystem");
 
-    tracing::info!(topic = %kafka_in_topic.0, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, "Sending callback data to Kafka");
-    let record = FutureRecord::to(kafka_in_topic.0.as_str())
-        .payload(&json)
-        .key("callback_query");
-
-    if let Err((e, _)) = producer.send(record, None).await {
-        tracing::error!(topic = %kafka_in_topic.0, key = "callback_query", callback_query_id = %query_id, user_id = %user_id, error = %e, "Failed to send callback data to Kafka");
-        return Err(Box::new(e));
+    if let Err(e) = message_system.publish(&incoming_msg).await {
+        tracing::error!(
+            callback_query_id = %query_id,
+            user_id = %user_id,
+            error = ?e,
+            "Failed to publish callback data via MessageSystem"
+        );
+        return Err(format!("Publishing error: {}", e).into());
     }
 
     Ok(())

@@ -22,3 +22,16 @@ openssl = { version = "0.10", features = ["vendored"] }
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+# MQTT Adapter Dependencies
+rumqttc = "0.25.0"
+async_trait = "0.1.77" # For MessageSystem trait
+thiserror = "1.0.58"   # For custom error types
+rand = "0.8"           # For nanoid generation in mqtt_adapter
+
+[dev-dependencies]
+testcontainers = "0.20.1"
+testcontainers-modules = { version = "0.6.0", features = ["kafka", "mosquitto"] }
+uuid = { version = "1.8.0", features = ["v4"] }
+# tokio is already a main dependency with "full" features
+# serde_json is already a main dependency
