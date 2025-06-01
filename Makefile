@@ -92,11 +92,16 @@ REMOTE_HOST?=plan10
 REMOTE_PATH?=~/src/ratatoskr
 
 push:
-	rsync -av --delete \
+	@echo "Pushing to remote server $(REMOTE_HOST):$(REMOTE_PATH)..."
+	@rsync -av --delete \
 		Cargo.toml Cargo.lock \
 		src scripts \
 		Makefile \
 		$(REMOTE_HOST):$(REMOTE_PATH)
+	@ssh $(REMOTE_HOST) "cd $(REMOTE_PATH) && cargo install --path ."
+	@ssh $(REMOTE_HOST) "cd $(REMOTE_PATH) && make install-service"
+	@ssh $(REMOTE_HOST) "cd $(REMOTE_PATH) && make start-service"
+
 
 # Service management targets
 install-service: install
