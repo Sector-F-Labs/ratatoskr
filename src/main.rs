@@ -56,6 +56,12 @@ async fn main() {
     });
     tracing::info!(kafka_out_topic = %kafka_out_topic, "Using Kafka OUT topic");
 
+    let kafka_status_topic_val = env::var("TELEGRAM_MESSAGE_SENT_STATUS_TOPIC").unwrap_or_else(|_| {
+        tracing::info!("TELEGRAM_MESSAGE_SENT_STATUS_TOPIC not set, defaulting to com.sectorflabs.ratatoskr.status");
+        "com.sectorflabs.ratatoskr.status".to_string()
+    });
+    tracing::info!(kafka_status_topic = %kafka_status_topic_val, "Using Kafka STATUS topic");
+
     let image_storage_dir = env::var("IMAGE_STORAGE_DIR").unwrap_or_else(|_| {
         tracing::info!("IMAGE_STORAGE_DIR not set, defaulting to ./images");
         "./files/in".to_string()
@@ -75,6 +81,19 @@ async fn main() {
             }),
     );
     tracing::info!("Kafka producer created successfully.");
+
+    let status_producer: Arc<FutureProducer> = Arc::new(
+        ClientConfig::new()
+            .set("bootstrap.servers", &kafka_broker)
+            // Add any other relevant producer configurations if needed, e.g., message.timeout.ms
+            .set("message.timeout.ms", "5000")
+            .create()
+            .unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Kafka status producer creation error");
+                panic!("Kafka status producer creation error: {}", e);
+            }),
+    );
+    tracing::info!("Kafka status producer created successfully.");
 
     let consumer: StreamConsumer = ClientConfig::new()
         .set("group.id", "ratatoskr-bot-consumer")
@@ -100,10 +119,17 @@ async fn main() {
 
     let bot_consumer_clone = bot.clone();
     let kafka_out_topic_clone = kafka_out_topic.clone();
+    // Add these lines
+    let status_producer_clone = Arc::clone(&status_producer);
+    let kafka_status_topic_clone = kafka_status_topic_val.clone();
+
     tokio::spawn(start_kafka_consumer_loop(
         bot_consumer_clone,
         consumer,
         kafka_out_topic_clone,
+        // Add these arguments
+        status_producer_clone,
+        kafka_status_topic_clone,
     ));
 
     let handler = dptree::entry()

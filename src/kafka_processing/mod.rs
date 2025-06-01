@@ -2,8 +2,12 @@ use crate::outgoing::{OutgoingMessage, OutgoingMessageType};
 use crate::utils::{create_markup, create_reply_keyboard};
 use futures_util::StreamExt;
 use rdkafka::consumer::StreamConsumer;
-use rdkafka::message::Message as KafkaMessageRd;
+use rdkafka::message::Message as KafkaMessageRd; // Ensure this is kept if used, or removed if not. It seems used by consumer.stream()
+use rdkafka::producer::{FutureProducer, FutureRecord};
 use std::path::Path;
+use std::sync::Arc;
+use chrono::Utc;
+use crate::kafka_processing::status_message::TelegramMessageSentStatus;
 use teloxide::{
     payloads::{
         EditMessageReplyMarkupSetters, EditMessageTextSetters, SendAnimationSetters,
@@ -15,13 +19,18 @@ use teloxide::{
 };
 
 pub mod outgoing;
+pub mod status_message;
 
 pub async fn start_kafka_consumer_loop(
     bot_consumer_clone: Bot,
     consumer: StreamConsumer,
     kafka_out_topic_clone: String,
+    status_producer: Arc<FutureProducer>,
+    status_topic: String,
 ) {
     tracing::info!(topic = %kafka_out_topic_clone, "Starting Kafka consumer stream for Telegram output...");
+    let status_producer_clone = status_producer.clone(); // Clone for the loop
+    let status_topic_clone = status_topic.clone(); // Clone for the loop
     let mut stream = consumer.stream();
     while let Some(result) = stream.next().await {
         match result {
@@ -30,8 +39,13 @@ pub async fn start_kafka_consumer_loop(
                 if let Some(payload) = kafka_msg.payload() {
                     match serde_json::from_slice::<OutgoingMessage>(payload) {
                         Ok(out_msg) => {
-                            if let Err(e) =
-                                handle_outgoing_message(&bot_consumer_clone, out_msg).await
+                            if let Err(e) = handle_outgoing_message(
+                                &bot_consumer_clone,
+                                out_msg,
+                                status_producer_clone.clone(), // Pass cloned producer
+                                status_topic_clone.clone(),   // Pass cloned topic
+                            )
+                            .await
                             {
                                 tracing::error!(topic = %kafka_msg.topic(), error = ?e, "Error handling OutgoingMessage");
                             }
@@ -56,8 +70,11 @@ pub async fn start_kafka_consumer_loop(
 async fn handle_outgoing_message(
     bot: &Bot,
     message: OutgoingMessage,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    status_producer: Arc<FutureProducer>,
+    status_topic: String,
+) -> Result<Option<teloxide::types::Message>, Box<dyn std::error::Error + Send + Sync>> {
     let chat_id = ChatId(message.target.chat_id);
+    let correlation_id = message.correlation_id.clone(); // Clone correlation_id for use in status messages
 
     match message.message_type {
         OutgoingMessageType::TextMessage(data) => {
@@ -80,7 +97,28 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "TextMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for TextMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent message status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send message status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::ImageMessage(data) => {
@@ -105,7 +143,26 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "ImageMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for ImageMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent image status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send image status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::AudioMessage(data) => {
@@ -142,7 +199,26 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "AudioMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for AudioMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent audio status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send audio status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::VoiceMessage(data) => {
@@ -171,7 +247,26 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "VoiceMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for VoiceMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent voice status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send voice status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::VideoMessage(data) => {
@@ -212,7 +307,26 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "VideoMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for VideoMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent video status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send video status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::VideoNoteMessage(data) => {
@@ -241,7 +355,26 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "VideoNoteMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for VideoNoteMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent video note status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send video note status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::StickerMessage(data) => {
@@ -262,7 +395,26 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "StickerMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for StickerMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent sticker status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send sticker status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::AnimationMessage(data) => {
@@ -299,7 +451,26 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "AnimationMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for AnimationMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent animation status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send animation status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::DocumentMessage(data) => {
@@ -329,7 +500,26 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            let sent_message = msg_to_send.await?;
+            let status_message_obj = TelegramMessageSentStatus::new(
+                sent_message.chat.id.0,
+                sent_message.id.0,
+                "success".to_string(),
+                "DocumentMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for DocumentMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&sent_message.chat.id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, "Successfully sent document status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %sent_message.chat.id.0, message_id = %sent_message.id.0, status_topic = %status_topic, error = %e, "Failed to send document status to Kafka"),
+            }
+            Ok(Some(sent_message))
         }
 
         OutgoingMessageType::EditMessage(data) => {
@@ -348,7 +538,6 @@ async fn handle_outgoing_message(
 
                 msg_to_edit.await?;
             } else if data.new_buttons.is_some() {
-                // Edit only buttons if no new text is provided
                 if let Some(markup) = create_markup(&data.new_buttons) {
                     bot.edit_message_reply_markup(
                         chat_id,
@@ -358,14 +547,52 @@ async fn handle_outgoing_message(
                     .await?;
                 }
             }
+
+            let status_message_obj = TelegramMessageSentStatus::new(
+                chat_id.0, // Use the ChatId from the function arguments
+                data.message_id, // Use message_id from EditMessageData
+                "success".to_string(),
+                "EditMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for EditMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&chat_id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %chat_id.0, message_id = %data.message_id, status_topic = %status_topic, "Successfully sent edit message status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %chat_id.0, message_id = %data.message_id, status_topic = %status_topic, error = %e, "Failed to send edit message status to Kafka"),
+            }
+            Ok(None)
         }
 
         OutgoingMessageType::DeleteMessage(data) => {
             tracing::info!(%chat_id, message_id = %data.message_id, "Deleting message in Telegram");
             bot.delete_message(chat_id, teloxide::types::MessageId(data.message_id))
                 .await?;
+
+            let status_message_obj = TelegramMessageSentStatus::new(
+                chat_id.0, // Use the ChatId from the function arguments
+                data.message_id, // Use message_id from DeleteMessageData
+                "success".to_string(),
+                "DeleteMessage".to_string(),
+                correlation_id,
+            );
+            let status_payload = serde_json::to_string(&status_message_obj).unwrap_or_else(|e| {
+                tracing::error!(error = %e, "Failed to serialize TelegramMessageSentStatus for DeleteMessage");
+                format!("{{\"error\":\"Failed to serialize status: {}\"}}", e)
+            });
+            let record = FutureRecord::to(&status_topic)
+                .payload(&status_payload)
+                .key(&chat_id.0.to_string());
+            match status_producer.send(record, None).await {
+                Ok(_) => tracing::info!(chat_id = %chat_id.0, message_id = %data.message_id, status_topic = %status_topic, "Successfully sent delete message status to Kafka"),
+                Err((e, _)) => tracing::error!(chat_id = %chat_id.0, message_id = %data.message_id, status_topic = %status_topic, error = %e, "Failed to send delete message status to Kafka"),
+            }
+            Ok(None)
         }
     }
-
-    Ok(())
 }
