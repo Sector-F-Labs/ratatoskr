@@ -1,8 +1,8 @@
-use crate::outgoing::{OutgoingMessage, OutgoingMessageType};
+use crate::kafka_processing::outgoing::{OutgoingMessage, OutgoingMessageType}; // Adjusted path due to `pub mod outgoing`
 use crate::utils::{create_markup, create_reply_keyboard};
-use futures_util::StreamExt;
-use rdkafka::consumer::StreamConsumer;
-use rdkafka::message::Message as KafkaMessageRd;
+// futures_util::StreamExt; // Removed
+// rdkafka::consumer::StreamConsumer; // Removed
+// rdkafka::message::Message as KafkaMessageRd; // Removed
 use std::path::Path;
 use teloxide::{
     payloads::{
@@ -16,44 +16,11 @@ use teloxide::{
 
 pub mod outgoing;
 
-pub async fn start_kafka_consumer_loop(
-    bot_consumer_clone: Bot,
-    consumer: StreamConsumer,
-    kafka_out_topic_clone: String,
-) {
-    tracing::info!(topic = %kafka_out_topic_clone, "Starting Kafka consumer stream for Telegram output...");
-    let mut stream = consumer.stream();
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(kafka_msg) => {
-                tracing::debug!(topic = %kafka_msg.topic(), partition = %kafka_msg.partition(), offset = %kafka_msg.offset(), "Consumed message from Kafka");
-                if let Some(payload) = kafka_msg.payload() {
-                    match serde_json::from_slice::<OutgoingMessage>(payload) {
-                        Ok(out_msg) => {
-                            if let Err(e) =
-                                handle_outgoing_message(&bot_consumer_clone, out_msg).await
-                            {
-                                tracing::error!(topic = %kafka_msg.topic(), error = ?e, "Error handling OutgoingMessage");
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(topic = %kafka_msg.topic(), error = %e, "Error deserializing message from Kafka payload");
-                            tracing::debug!(raw_payload = ?String::from_utf8_lossy(payload), "Problematic Kafka payload");
-                        }
-                    }
-                } else {
-                    tracing::warn!(topic = %kafka_msg.topic(), partition = %kafka_msg.partition(), offset = %kafka_msg.offset(), "Received Kafka message with empty payload");
-                }
-            }
-            Err(e) => {
-                tracing::error!(topic = %kafka_out_topic_clone, error = %e, "Error consuming message from Kafka");
-            }
-        }
-    }
-    tracing::warn!(topic = %kafka_out_topic_clone, "Kafka consumer stream ended.");
-}
+// start_kafka_consumer_loop has been removed as its functionality is now part of KafkaAdapter.
 
-async fn handle_outgoing_message(
+// This function remains for now, as it handles the Telegram-specific sending logic.
+// It will likely be called by the callback provided to KafkaAdapter::consume.
+pub async fn handle_outgoing_message(
     bot: &Bot,
     message: OutgoingMessage,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
