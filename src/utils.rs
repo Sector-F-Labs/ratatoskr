@@ -1,8 +1,6 @@
 use crate::outgoing::{ButtonInfo, ReplyKeyboardMarkup};
 use crate::telegram_handler::incoming::{FileInfo, FileMetadata, FileType};
-use chrono::Utc;
 use std::error::Error;
-use std::path::Path;
 use teloxide::Bot;
 use teloxide::prelude::Requester;
 use teloxide::types::{
@@ -10,8 +8,6 @@ use teloxide::types::{
     InlineKeyboardMarkup, KeyboardButton, KeyboardButtonPollType, KeyboardMarkup, PhotoSize,
     Sticker, Video, VideoNote, Voice,
 };
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
 
 pub fn create_markup(buttons_opt: &Option<Vec<Vec<ButtonInfo>>>) -> Option<InlineKeyboardMarkup> {
     buttons_opt.as_ref().map(|buttons| {
@@ -98,88 +94,29 @@ pub fn create_reply_keyboard(keyboard_opt: &Option<ReplyKeyboardMarkup>) -> Opti
     })
 }
 
-pub async fn download_file(
+pub async fn get_file_info(
     bot: &Bot,
     file: &FileMeta,
     file_type: FileType,
     metadata: FileMetadata,
-    storage_dir: &str,
-    chat_id: i64,
-    message_id: i32,
 ) -> Result<FileInfo, Box<dyn Error + Send + Sync>> {
-    // Create storage directory if it doesn't exist
-    fs::create_dir_all(storage_dir).await?;
-
     // Get file info from Telegram
     let telegram_file = bot.get_file(&file.id).await?;
     let file_path = &telegram_file.path;
 
-    // Generate local filename with appropriate extension
-    let extension = match file_type {
-        FileType::Photo => "jpg",
-        FileType::Audio => "mp3",
-        FileType::Voice => "ogg",
-        FileType::Video => "mp4",
-        FileType::VideoNote => "mp4",
-        FileType::Document => {
-            if let FileMetadata::Document { file_name, .. } = &metadata {
-                if let Some(name) = file_name {
-                    Path::new(name)
-                        .extension()
-                        .and_then(|ext| ext.to_str())
-                        .unwrap_or("bin")
-                } else {
-                    "bin"
-                }
-            } else {
-                "bin"
-            }
-        }
-        FileType::Sticker => "webp",
-        FileType::Animation => "gif",
-    };
-
-    let filename = format!(
-        "{}_{}_{}_{}_{}.{}",
-        file_type_to_string(&file_type),
-        chat_id,
-        message_id,
-        file.unique_id,
-        Utc::now().timestamp(),
-        extension
-    );
-    let local_path = Path::new(storage_dir).join(&filename);
-
-    // Download the file
-    let download_url = format!(
+    // Generate the Telegram file URL
+    let telegram_file_url = format!(
         "https://api.telegram.org/file/bot{}/{}",
         bot.token(),
         file_path
     );
-    let response = reqwest::get(&download_url).await?;
-
-    if !response.status().is_success() {
-        return Err(format!("Failed to download file: HTTP {}", response.status()).into());
-    }
-
-    let content = response.bytes().await?;
-
-    // Save to local filesystem
-    let mut file_handle = fs::File::create(&local_path).await?;
-    file_handle.write_all(&content).await?;
-    file_handle.flush().await?;
-
-    // Get absolute path for applications to use
-    let absolute_path = local_path
-        .canonicalize()
-        .map_err(|e| format!("Failed to get absolute path: {}", e))?;
 
     tracing::info!(
         file_id = %file.id,
         file_type = %file_type_to_string(&file_type),
-        local_path = %absolute_path.display(),
-        file_size = %content.len(),
-        "File downloaded successfully"
+        telegram_path = %file_path,
+        telegram_url = %telegram_file_url,
+        "File info obtained from Telegram"
     );
 
     Ok(FileInfo {
@@ -187,7 +124,7 @@ pub async fn download_file(
         file_unique_id: file.unique_id.clone(),
         file_type,
         file_size: file.size,
-        local_path: absolute_path.to_string_lossy().to_string(),
+        file_url: telegram_file_url, // Using telegram URL instead of local path
         metadata,
     })
 }

@@ -18,10 +18,13 @@ pub enum IncomingMessageType {
     MessageReaction(MessageReactionData),
 }
 
+/// Data for incoming Telegram messages
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TelegramMessageData {
+    /// The original Telegram message
     pub message: TelegramMessage,
-    pub downloaded_files: Vec<FileInfo>,
+    /// File attachments with download URLs - files are not downloaded yet
+    pub file_attachments: Vec<FileInfo>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -50,13 +53,21 @@ pub struct MessageSource {
     pub bot_username: Option<String>,
 }
 
+/// Information about a file attached to a Telegram message
+/// Contains metadata and download URL for the file
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FileInfo {
+    /// Telegram file identifier - can be used to download the file
     pub file_id: String,
+    /// Unique file identifier which is supposed to be the same over time and for different bots
     pub file_unique_id: String,
+    /// Type of the file (photo, video, document, etc.)
     pub file_type: FileType,
+    /// File size in bytes
     pub file_size: u32,
-    pub local_path: String,
+    /// Direct URL to download the file from Telegram servers
+    pub file_url: String,
+    /// Additional file-specific metadata
     pub metadata: FileMetadata,
 }
 
@@ -134,14 +145,14 @@ pub struct IncomingCallbackMessage {
 impl IncomingMessage {
     pub fn new_telegram_message(
         message: TelegramMessage,
-        downloaded_files: Vec<FileInfo>,
+        file_attachments: Vec<FileInfo>,
         bot_id: Option<u64>,
         bot_username: Option<String>,
     ) -> Self {
         Self {
             message_type: IncomingMessageType::TelegramMessage(TelegramMessageData {
                 message,
-                downloaded_files,
+                file_attachments,
             }),
             timestamp: Utc::now(),
             source: MessageSource {
