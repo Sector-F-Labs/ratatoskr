@@ -1,6 +1,6 @@
 # Makefile for Deno Telegram <-> Kafka Bot
 
-.PHONY: help install setup run dev stop produce test_buttons test_image test_callback install-service uninstall-service start-service stop-service status-service
+.PHONY: help install setup run dev stop produce test_buttons test_image test_callback test_typing test_typing_demo install-service uninstall-service start-service stop-service status-service
 
 # Kafka config
 KAFKA_BROKER=localhost:9092
@@ -37,6 +37,8 @@ help:
 	@echo "  test_callback Simulate callback (MESSAGE_ID=123 CALLBACK_DATA=\"data\")"
 	@echo "  test_keyboard Send message with reply keyboard (TEXT=\"your message\")"
 	@echo "  test_location Send location request with reply keyboard"
+	@echo "  test_typing   Send typing indicator"
+	@echo "  test_typing_demo Send typing indicator followed by message"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  CHAT_ID            - Target Telegram chat ID (required for testing)"
@@ -75,7 +77,13 @@ test_buttons:
 test_image:
 	./scripts/produce_image.sh "$(IMAGE_PATH)" "$(CAPTION)"
 
-test_all_message_types: test_text test_buttons test_image
+test_typing:
+	./scripts/produce_typing.sh
+
+test_typing_demo:
+	./scripts/produce_typing_demo.sh
+
+test_all_message_types: test_text test_buttons test_image test_typing
 	echo "All message types tested."
 
 test_callback:

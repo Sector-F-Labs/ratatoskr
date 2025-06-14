@@ -128,6 +128,32 @@ For a complete development environment with Kafka, Zookeeper, and Kafdrop (a Kaf
 
 Ratatoskr uses a unified message type system for consistent handling of all Kafka communications. For detailed documentation, see [Unified Message Types](docs/unified_message_types.md).
 
+### 🔧 Client Type Generation
+
+Ratatoskr provides TypeScript definitions that can be used with [quicktype](https://quicktype.io/) to generate client types in your preferred programming language:
+
+```bash
+# Install quicktype
+npm install -g quicktype
+
+# Generate Python types
+quicktype --src docs/types/ratatoskr-types.ts --lang python --out ratatoskr_types.py
+
+# Generate Java types
+quicktype --src docs/types/ratatoskr-types.ts --lang java --out RatatoskrTypes.java
+
+# Generate Go types
+quicktype --src docs/types/ratatoskr-types.ts --lang go --out ratatoskr_types.go
+```
+
+Supported languages include Python, Java, C#, Go, Rust, Kotlin, Swift, Dart, and more. For complete instructions and examples, see [Type Generation Guide](docs/types/README.md).
+
+You can also use the provided generation script:
+```bash
+cd docs/types
+./generate-types.sh  # Generates types for all supported languages
+```
+
 ### Incoming Messages to `KAFKA_IN_TOPIC` (e.g., `com.sectorflabs.ratatoskr.in`)
 
 All messages from Telegram are wrapped in the unified `IncomingMessage` type:
@@ -192,6 +218,26 @@ All messages from Telegram are wrapped in the unified `IncomingMessage` type:
 
 All messages to Telegram use the unified `OutgoingMessage` type:
 
+#### Typing Indicator Example
+```json
+{
+  "message_type": {
+    "type": "TypingMessage",
+    "data": {
+      "action": "typing"
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "target": {
+    "platform": "telegram",
+    "chat_id": 123456789,
+    "thread_id": null
+  }
+}
+```
+
+This message will cause the bot to display the "typing..." indicator in the specified chat, letting users know the bot is busy processing.
+
 #### Text Message Example
 ```json
 {
@@ -247,6 +293,7 @@ All messages to Telegram use the unified `OutgoingMessage` type:
 - **DocumentMessage** - Send documents/files from local filesystem  
 - **EditMessage** - Edit previously sent messages
 - **DeleteMessage** - Delete messages from chat
+- **TypingMessage** - Show typing indicator (bot is busy)
 
 ### Legacy Format Support
 

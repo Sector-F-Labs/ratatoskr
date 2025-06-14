@@ -365,6 +365,11 @@ async fn handle_outgoing_message(
             bot.delete_message(chat_id, teloxide::types::MessageId(data.message_id))
                 .await?;
         }
+
+        OutgoingMessageType::TypingMessage(_data) => {
+            tracing::info!(%chat_id, "Sending typing action to Telegram");
+            bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing).await?;
+        }
     }
 
     Ok(())

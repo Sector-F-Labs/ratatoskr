@@ -23,6 +23,7 @@ pub enum OutgoingMessageType {
     AnimationMessage(AnimationMessageData),
     EditMessage(EditMessageData),
     DeleteMessage(DeleteMessageData),
+    TypingMessage(TypingMessageData),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -121,6 +122,11 @@ pub struct EditMessageData {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeleteMessageData {
     pub message_id: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TypingMessageData {
+    pub action: Option<String>, // e.g., "typing"
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
