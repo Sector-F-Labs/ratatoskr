@@ -9,6 +9,31 @@ use teloxide::types::{
     Sticker, Video, VideoNote, Voice,
 };
 
+/// Formats text to comply with Telegram's markdown formatting requirements.
+///
+/// Telegram uses a strict subset of markdown, and certain characters need to be
+/// escaped or handled specially. This function ensures that the text will be
+/// properly formatted for Telegram's MarkdownV2 parse mode.
+///
+/// # Arguments
+/// * `text` - The input text that may contain markdown formatting
+///
+/// # Returns
+/// * Formatted text that complies with Telegram's markdown requirements
+///
+/// # Note
+/// Currently returns input text unchanged - implementation to be completed later.
+pub fn format_telegram_markdown(text: &str) -> String {
+    // TODO: Implement Telegram markdown formatting
+    // This should handle:
+    // - Escaping special characters: _*[]()~`>#+-=|{}.!
+    // - Converting standard markdown to Telegram MarkdownV2 format
+    // - Handling nested formatting correctly
+    // - Preserving valid Telegram markdown while escaping invalid sequences
+
+    text.to_string()
+}
+
 pub fn create_markup(buttons_opt: &Option<Vec<Vec<ButtonInfo>>>) -> Option<InlineKeyboardMarkup> {
     buttons_opt.as_ref().map(|buttons| {
         InlineKeyboardMarkup::new(buttons.iter().map(|row| {
@@ -258,4 +283,34 @@ pub fn file_info_from_animation(animation: &Animation) -> (FileMeta, FileType, F
                 .unwrap_or(0),
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_telegram_markdown_stub() {
+        // Test the stub implementation - should return input unchanged
+        let input = "This is a *test* message with _markdown_ formatting";
+        let result = format_telegram_markdown(input);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_format_telegram_markdown_empty() {
+        // Test with empty string
+        let input = "";
+        let result = format_telegram_markdown(input);
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_format_telegram_markdown_special_chars() {
+        // Test with Telegram special characters that need escaping
+        let input = "Text with _*[]()~`>#+-=|{}.! special chars";
+        let result = format_telegram_markdown(input);
+        // Currently should return unchanged since it's a stub
+        assert_eq!(result, input);
+    }
 }

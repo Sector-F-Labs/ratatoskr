@@ -46,6 +46,9 @@ help:
 	@echo "  test_location Send location request with reply keyboard"
 	@echo "  test_typing   Send typing indicator"
 	@echo "  test_typing_demo Send typing indicator followed by message"
+	@echo "  test_markdown Send complex markdown formatting test messages"
+	@echo "  test_simple_markdown Send single markdown test message (TEXT=\"message\")"
+	@echo "  test_markdown_edge_cases Send MarkdownV2 edge case test messages"
 	@echo "  test_backward_compatibility Test legacy messages without trace_id"
 	@echo ""
 	@echo "Environment variables:"
@@ -88,6 +91,15 @@ test_auto_buttons:
 test_cafe_buttons:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_cafe_buttons.sh
 
+test_markdown:
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_markdown.sh
+
+test_simple_markdown:
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_simple_markdown.sh "$(TEXT)"
+
+test_markdown_edge_cases:
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_markdown_edge_cases.sh
+
 test_image:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_image.sh "$(IMAGE_PATH)" "$(CAPTION)"
 
@@ -97,7 +109,7 @@ test_typing:
 test_typing_demo:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_typing_demo.sh
 
-test_all_message_types: test_text test_buttons test_image test_typing
+test_all_message_types: test_text test_buttons test_image test_typing test_markdown test_markdown_edge_cases
 	echo "All message types tested."
 
 debug:

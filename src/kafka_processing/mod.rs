@@ -1,5 +1,5 @@
 use self::outgoing::{OutgoingMessage, OutgoingMessageType};
-use crate::utils::{create_markup, create_reply_keyboard};
+use crate::utils::{create_markup, create_reply_keyboard, format_telegram_markdown};
 use futures_util::StreamExt;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message as KafkaMessageRd;
@@ -78,7 +78,8 @@ async fn handle_outgoing_message(
     match message.message_type {
         OutgoingMessageType::TextMessage(data) => {
             tracing::info!(text_length = %data.text.len(), has_buttons = %data.buttons.is_some(), "Sending text message to Telegram");
-            let mut msg_to_send = bot.send_message(chat_id, data.text);
+            let formatted_text = format_telegram_markdown(&data.text);
+            let mut msg_to_send = bot.send_message(chat_id, formatted_text);
 
             if let Some(parse_mode) = data.parse_mode {
                 msg_to_send = match parse_mode.as_str() {
@@ -122,7 +123,8 @@ async fn handle_outgoing_message(
             let mut msg_to_send = bot.send_photo(chat_id, input_file);
 
             if let Some(caption) = data.caption {
-                msg_to_send = msg_to_send.caption(caption);
+                let formatted_caption = format_telegram_markdown(&caption);
+                msg_to_send = msg_to_send.caption(formatted_caption);
             }
 
             if let Some(markup) = create_markup(&data.buttons) {
@@ -147,7 +149,8 @@ async fn handle_outgoing_message(
             let mut msg_to_send = bot.send_audio(chat_id, input_file);
 
             if let Some(caption) = data.caption {
-                msg_to_send = msg_to_send.caption(caption);
+                let formatted_caption = format_telegram_markdown(&caption);
+                msg_to_send = msg_to_send.caption(formatted_caption);
             }
 
             if let Some(duration) = data.duration {
@@ -184,7 +187,8 @@ async fn handle_outgoing_message(
             let mut msg_to_send = bot.send_voice(chat_id, input_file);
 
             if let Some(caption) = data.caption {
-                msg_to_send = msg_to_send.caption(caption);
+                let formatted_caption = format_telegram_markdown(&caption);
+                msg_to_send = msg_to_send.caption(formatted_caption);
             }
 
             if let Some(duration) = data.duration {
@@ -213,7 +217,8 @@ async fn handle_outgoing_message(
             let mut msg_to_send = bot.send_video(chat_id, input_file);
 
             if let Some(caption) = data.caption {
-                msg_to_send = msg_to_send.caption(caption);
+                let formatted_caption = format_telegram_markdown(&caption);
+                msg_to_send = msg_to_send.caption(formatted_caption);
             }
 
             if let Some(duration) = data.duration {
@@ -304,7 +309,8 @@ async fn handle_outgoing_message(
             let mut msg_to_send = bot.send_animation(chat_id, input_file);
 
             if let Some(caption) = data.caption {
-                msg_to_send = msg_to_send.caption(caption);
+                let formatted_caption = format_telegram_markdown(&caption);
+                msg_to_send = msg_to_send.caption(formatted_caption);
             }
 
             if let Some(duration) = data.duration {
@@ -346,7 +352,8 @@ async fn handle_outgoing_message(
             let mut msg_to_send = bot.send_document(chat_id, input_file);
 
             if let Some(caption) = data.caption {
-                msg_to_send = msg_to_send.caption(caption);
+                let formatted_caption = format_telegram_markdown(&caption);
+                msg_to_send = msg_to_send.caption(formatted_caption);
             }
 
             if let Some(markup) = create_markup(&data.buttons) {
@@ -364,10 +371,11 @@ async fn handle_outgoing_message(
             tracing::info!(message_id = %data.message_id, has_new_text = %data.new_text.is_some(), has_new_buttons = %data.new_buttons.is_some(), "Editing message in Telegram");
 
             if let Some(new_text) = data.new_text {
+                let formatted_text = format_telegram_markdown(&new_text);
                 let mut msg_to_edit = bot.edit_message_text(
                     chat_id,
                     teloxide::types::MessageId(data.message_id),
-                    new_text,
+                    formatted_text,
                 );
 
                 if let Some(markup) = create_markup(&data.new_buttons) {
