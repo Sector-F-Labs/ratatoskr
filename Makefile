@@ -49,6 +49,7 @@ help:
 	@echo "  test_markdown Send complex markdown formatting test messages"
 	@echo "  test_simple_markdown Send single markdown test message (TEXT=\"message\")"
 	@echo "  test_markdown_edge_cases Send MarkdownV2 edge case test messages"
+	@echo "  test_markdown_fallback Test markdown fallback to plain text functionality"
 	@echo "  test_backward_compatibility Test legacy messages without trace_id"
 	@echo ""
 	@echo "Environment variables:"
@@ -100,6 +101,9 @@ test_simple_markdown:
 test_markdown_edge_cases:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_markdown_edge_cases.sh
 
+test_markdown_fallback:
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_markdown_fallback.sh
+
 test_image:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_image.sh "$(IMAGE_PATH)" "$(CAPTION)"
 
@@ -109,7 +113,7 @@ test_typing:
 test_typing_demo:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_typing_demo.sh
 
-test_all_message_types: test_text test_buttons test_image test_typing test_markdown test_markdown_edge_cases
+test_all_message_types: test_text test_buttons test_image test_typing test_markdown test_markdown_edge_cases test_markdown_fallback
 	echo "All message types tested."
 
 debug:

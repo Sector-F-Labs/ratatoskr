@@ -17,6 +17,28 @@ use tracing::Instrument;
 
 pub mod outgoing;
 
+/// Simple helper to try sending with markdown, falling back to plain text if it fails
+async fn try_send_with_fallback<T, F, Fut>(
+    markdown_result: Result<T, teloxide::RequestError>,
+    fallback_fn: F,
+    message_type: &str,
+) -> Result<T, teloxide::RequestError>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<T, teloxide::RequestError>>,
+{
+    match markdown_result {
+        Ok(result) => Ok(result),
+        Err(_) => {
+            tracing::warn!(
+                "Failed to send {} with formatting, retrying with plain text",
+                message_type
+            );
+            fallback_fn().await
+        }
+    }
+}
+
 pub async fn start_kafka_consumer_loop(
     bot_consumer_clone: Bot,
     consumer: StreamConsumer,
@@ -78,16 +100,6 @@ async fn handle_outgoing_message(
     match message.message_type {
         OutgoingMessageType::TextMessage(data) => {
             tracing::info!(text_length = %data.text.len(), has_buttons = %data.buttons.is_some(), "Sending text message to Telegram");
-            let formatted_text = format_telegram_markdown(&data.text);
-            let mut msg_to_send = bot.send_message(chat_id, formatted_text);
-
-            if let Some(parse_mode) = data.parse_mode {
-                msg_to_send = match parse_mode.as_str() {
-                    "HTML" => msg_to_send.parse_mode(ParseMode::Html),
-                    "Markdown" => msg_to_send.parse_mode(ParseMode::MarkdownV2),
-                    _ => msg_to_send,
-                };
-            }
 
             // Auto-organize buttons if they exist
             let organized_buttons = data.buttons.as_ref().map(|buttons| {
@@ -101,15 +113,53 @@ async fn handle_outgoing_message(
                 }
             });
 
-            if let Some(markup) = create_markup(&organized_buttons) {
-                msg_to_send = msg_to_send.reply_markup(markup);
-            }
+            // Try with markdown first, fallback to plain text if parsing fails
+            if data.parse_mode.is_some() {
+                let formatted_text = format_telegram_markdown(&data.text);
+                let mut msg_to_send = bot.send_message(chat_id, formatted_text);
 
-            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
-                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
-            }
+                if let Some(parse_mode) = &data.parse_mode {
+                    msg_to_send = match parse_mode.as_str() {
+                        "HTML" => msg_to_send.parse_mode(ParseMode::Html),
+                        "Markdown" => msg_to_send.parse_mode(ParseMode::MarkdownV2),
+                        _ => msg_to_send,
+                    };
+                }
 
-            msg_to_send.await?;
+                if let Some(markup) = create_markup(&organized_buttons) {
+                    msg_to_send = msg_to_send.reply_markup(markup);
+                }
+
+                if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                    msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+                }
+
+                try_send_with_fallback(
+                    msg_to_send.await,
+                    || async {
+                        let mut plain_msg = bot.send_message(chat_id, &data.text);
+                        if let Some(markup) = create_markup(&organized_buttons) {
+                            plain_msg = plain_msg.reply_markup(markup);
+                        }
+                        if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                            plain_msg = plain_msg.reply_markup(reply_keyboard);
+                        }
+                        plain_msg.await
+                    },
+                    "text message",
+                )
+                .await?;
+            } else {
+                // No parse mode, send as plain text
+                let mut msg_to_send = bot.send_message(chat_id, &data.text);
+                if let Some(markup) = create_markup(&organized_buttons) {
+                    msg_to_send = msg_to_send.reply_markup(markup);
+                }
+                if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                    msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+                }
+                msg_to_send.await?;
+            }
         }
 
         OutgoingMessageType::ImageMessage(data) => {
@@ -120,22 +170,53 @@ async fn handle_outgoing_message(
             }
 
             let input_file = InputFile::file(&data.image_path);
-            let mut msg_to_send = bot.send_photo(chat_id, input_file);
 
-            if let Some(caption) = data.caption {
-                let formatted_caption = format_telegram_markdown(&caption);
-                msg_to_send = msg_to_send.caption(formatted_caption);
+            // Try with markdown caption first, fallback to plain text if parsing fails
+            if let Some(caption) = &data.caption {
+                let formatted_caption = format_telegram_markdown(caption);
+                let mut msg_to_send = bot
+                    .send_photo(chat_id, input_file.clone())
+                    .caption(formatted_caption)
+                    .parse_mode(ParseMode::MarkdownV2);
+
+                if let Some(markup) = create_markup(&data.buttons) {
+                    msg_to_send = msg_to_send.reply_markup(markup);
+                }
+
+                if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                    msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+                }
+
+                try_send_with_fallback(
+                    msg_to_send.await,
+                    || async {
+                        let mut plain_msg =
+                            bot.send_photo(chat_id, input_file.clone()).caption(caption);
+                        if let Some(markup) = create_markup(&data.buttons) {
+                            plain_msg = plain_msg.reply_markup(markup);
+                        }
+                        if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                            plain_msg = plain_msg.reply_markup(reply_keyboard);
+                        }
+                        plain_msg.await
+                    },
+                    "image message",
+                )
+                .await?;
+            } else {
+                // No caption, send without formatting
+                let mut msg_to_send = bot.send_photo(chat_id, input_file);
+
+                if let Some(markup) = create_markup(&data.buttons) {
+                    msg_to_send = msg_to_send.reply_markup(markup);
+                }
+
+                if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                    msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+                }
+
+                msg_to_send.await?;
             }
-
-            if let Some(markup) = create_markup(&data.buttons) {
-                msg_to_send = msg_to_send.reply_markup(markup);
-            }
-
-            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
-                msg_to_send = msg_to_send.reply_markup(reply_keyboard);
-            }
-
-            msg_to_send.await?;
         }
 
         OutgoingMessageType::AudioMessage(data) => {
@@ -372,17 +453,34 @@ async fn handle_outgoing_message(
 
             if let Some(new_text) = data.new_text {
                 let formatted_text = format_telegram_markdown(&new_text);
-                let mut msg_to_edit = bot.edit_message_text(
-                    chat_id,
-                    teloxide::types::MessageId(data.message_id),
-                    formatted_text,
-                );
+                let mut msg_to_edit = bot
+                    .edit_message_text(
+                        chat_id,
+                        teloxide::types::MessageId(data.message_id),
+                        formatted_text,
+                    )
+                    .parse_mode(ParseMode::MarkdownV2);
 
                 if let Some(markup) = create_markup(&data.new_buttons) {
                     msg_to_edit = msg_to_edit.reply_markup(markup);
                 }
 
-                msg_to_edit.await?;
+                try_send_with_fallback(
+                    msg_to_edit.await,
+                    || async {
+                        let mut plain_edit = bot.edit_message_text(
+                            chat_id,
+                            teloxide::types::MessageId(data.message_id),
+                            &new_text,
+                        );
+                        if let Some(markup) = create_markup(&data.new_buttons) {
+                            plain_edit = plain_edit.reply_markup(markup);
+                        }
+                        plain_edit.await
+                    },
+                    "edit message",
+                )
+                .await?;
             } else if data.new_buttons.is_some() {
                 // Edit only buttons if no new text is provided
                 if let Some(markup) = create_markup(&data.new_buttons) {

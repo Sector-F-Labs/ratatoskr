@@ -6,6 +6,8 @@ This document explains how to test the Telegram markdown formatting functionalit
 
 Telegram uses a strict subset of markdown called MarkdownV2, which requires specific character escaping and has particular rules for nested formatting. The `format_telegram_markdown()` function in `src/utils.rs` handles this conversion.
 
+**Fallback Mechanism**: If a message fails to send due to markdown parsing errors, the system automatically retries sending the same message as plain text to ensure delivery.
+
 ## Test Scripts
 
 ### 1. Simple Markdown Test (`test_simple_markdown`)
@@ -51,6 +53,7 @@ make test_markdown_edge_cases
 
 **Tests included**:
 - All reserved characters: `_ * [ ] ( ) ~ ` > # + - = | { } . !`
+- Heading edge cases (# at start vs # in middle vs #hashtags)
 - Consecutive special characters
 - Mixed formatting with special chars
 - Code blocks with all special characters
@@ -66,6 +69,24 @@ make test_markdown_edge_cases
 - Long text stress test
 
 **Use this for**: Debugging specific escaping issues
+
+### 4. Markdown Fallback Test (`test_markdown_fallback`)
+
+Tests the automatic fallback from markdown to plain text when parsing fails:
+
+```bash
+make test_markdown_fallback
+```
+
+**Tests included**:
+- Invalid markdown syntax (unclosed formatting)
+- Conflicting markdown formats
+- Unescaped special characters
+- Image captions with bad markdown
+- Edit messages with invalid formatting
+- Control test with valid markdown
+
+**Use this for**: Verifying robust message delivery even with broken markdown
 
 ## How to Interpret Results
 
@@ -194,7 +215,7 @@ pub fn format_telegram_markdown(text: &str) -> String {
 make test_all_message_types
 
 # Run just markdown-specific tests
-make test_markdown test_simple_markdown test_markdown_edge_cases
+make test_markdown test_simple_markdown test_markdown_edge_cases test_markdown_fallback
 ```
 
 ## Need Help?
