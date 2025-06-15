@@ -1,0 +1,25 @@
+# Ratatoskr Configuration
+# Copy this file to .envrc and customize for your environment
+# If using direnv, run: direnv allow
+
+# Telegram Bot Configuration
+export TELEGRAM_BOT_TOKEN="your_bot_token_here"
+
+# Kafka Configuration
+export KAFKA_BROKER="localhost:9092"
+export KAFKA_IN_TOPIC="com.sectorflabs.ratatoskr.in"
+export KAFKA_OUT_TOPIC="com.sectorflabs.ratatoskr.out"
+
+# Image Storage
+export IMAGE_STORAGE_DIR="./images"
+
+# Testing Configuration
+export CHAT_ID="123456789"  # Your Telegram chat ID for testing
+
+# Remote Deployment Configuration
+export REMOTE_HOST="myserver.example.com"  # Remote server hostname/IP
+export REMOTE_USER="username"              # SSH username for remote server
+export REMOTE_PATH="~/src/ratatoskr"        # Path on remote server
+
+# Logging
+export RUST_LOG="info" 

@@ -1,0 +1,21 @@
+[Unit]
+Description=Ratatoskr Telegram <-> Kafka Bridge
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/home/divanvisagie/src/ratatoskr/.env
+ExecStart=/home/divanvisagie/.cargo/bin/ratatoskr
+WorkingDirectory=/home/divanvisagie/src/ratatoskr/
+Restart=always
+RestartSec=5
+User=divanvisagie
+Group=divanvisagie
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ratatoskr
+
+[Install]
+WantedBy=multi-user.target

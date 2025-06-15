@@ -42,6 +42,19 @@ A lightweight Telegram <-> Kafka bridge written in **Rust**, designed to decoupl
 
    You can place these in a `.env` file or export them in your shell. A `.env.example` file is provided as a template.
 
+   **Using direnv (recommended):**
+   ```sh
+   cp .envrc.example .envrc
+   # Edit .envrc with your configuration
+   direnv allow
+   ```
+
+   **Or using a .env file:**
+   ```sh
+   cp .envrc.example .env
+   # Edit .env with your configuration
+   ```
+
 3. **Build and run the bot:**
 
    ```sh

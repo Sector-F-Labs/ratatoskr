@@ -41,12 +41,12 @@ help:
 	@echo "  test_typing_demo Send typing indicator followed by message"
 	@echo ""
 	@echo "Environment variables:"
+	@echo "  See .envrc.example for all configuration options"
+	@echo "  Copy .envrc.example to .envrc and customize"
 	@echo "  CHAT_ID            - Target Telegram chat ID (required for testing)"
-	@echo "  KAFKA_BROKER       - Kafka broker address (default: localhost:9092)"
-	@echo "  KAFKA_IN_TOPIC     - Input topic name"
-	@echo "  KAFKA_OUT_TOPIC    - Output topic name"
-	@echo "  REMOTE_HOST        - Remote host for pushpi (default: divanvisagie@heimdallr)"
-	@echo "  REMOTE_PATH        - Remote path for pushpi (default: ~/src/ratatoskr)"
+	@echo "  REMOTE_HOST        - Remote host for deployment"
+	@echo "  REMOTE_USER        - Remote user for deployment"
+	@echo "  REMOTE_PATH        - Remote path for deployment"
 
 main:
 	cargo build
@@ -95,29 +95,49 @@ test_keyboard:
 test_location:
 	./scripts/produce_location_request.sh "$(TEXT)"
 
-# Push to remote server (configurable via environment variables)
-REMOTE_HOST?=plan10
-REMOTE_PATH?=~/src/ratatoskr
+# Push to remote server (configurable via .envrc or environment variables)
+REMOTE_HOST?=$(shell echo $$REMOTE_HOST)
+REMOTE_USER?=$(shell echo $$REMOTE_USER)
+REMOTE_PATH?=$(shell echo $$REMOTE_PATH)
 
 push:
-	@echo "Pushing to remote server $(REMOTE_HOST):$(REMOTE_PATH)..."
+	@if [ -z "$(REMOTE_HOST)" ]; then \
+		echo "Error: REMOTE_HOST not set. Please set it in .envrc or environment."; \
+		echo "Example: export REMOTE_HOST=myserver.example.com"; \
+		exit 1; \
+	fi
+	@if [ -z "$(REMOTE_USER)" ]; then \
+		echo "Error: REMOTE_USER not set. Please set it in .envrc or environment."; \
+		echo "Example: export REMOTE_USER=username"; \
+		exit 1; \
+	fi
+	@if [ -z "$(REMOTE_PATH)" ]; then \
+		echo "Error: REMOTE_PATH not set. Please set it in .envrc or environment."; \
+		echo "Example: export REMOTE_PATH=~/src/ratatoskr"; \
+		exit 1; \
+	fi
+	@echo "Pushing to remote server $(REMOTE_USER)@$(REMOTE_HOST):$(REMOTE_PATH)..."
 	@rsync -av --delete \
 		Cargo.toml Cargo.lock \
 		src scripts \
 		Makefile \
-		$(REMOTE_HOST):$(REMOTE_PATH)
-	@ssh $(REMOTE_HOST) "cd $(REMOTE_PATH) && cargo install --path ."
-	@ssh $(REMOTE_HOST) "cd $(REMOTE_PATH) && make install-service"
-	@ssh $(REMOTE_HOST) "cd $(REMOTE_PATH) && make start-service"
-
-
-# Service management targets
-install-service: install
-	@echo "Installing ratatoskr as macOS LaunchAgent..."
-	@mkdir -p /usr/local/var/ratatoskr
-	@mkdir -p /usr/local/var/log
-	@cp scripts/com.sectorflabs.ratatoskr.plist ~/Library/LaunchAgents/
-	@echo "Service installed. Use 'make start-service' to start it."
+		$(REMOTE_USER)@$(REMOTE_HOST):$(REMOTE_PATH)
+	@echo "Installing binary on remote server..."
+	@ssh $(REMOTE_USER)@$(REMOTE_HOST) "cd $(REMOTE_PATH) && cargo install --path ."
+	@echo "Detecting OS and installing appropriate service..."
+	@ssh $(REMOTE_USER)@$(REMOTE_HOST) "cd $(REMOTE_PATH) && \
+		if [[ \"\$$OSTYPE\" == \"darwin\"* ]]; then \
+			echo 'Detected macOS, installing LaunchAgent...'; \
+			./scripts/install-service-macos.sh; \
+			launchctl load ~/Library/LaunchAgents/com.sectorflabs.ratatoskr.plist; \
+		elif [[ \"\$$OSTYPE\" == \"linux\"* ]] || command -v systemctl >/dev/null 2>&1; then \
+			echo 'Detected Linux, installing systemd service...'; \
+			./scripts/install-service-linux.sh; \
+			sudo systemctl start ratatoskr; \
+		else \
+			echo 'Unknown OS, skipping service installation'; \
+		fi"
+	@echo "Push and service installed. Use 'make start-service' to start it."
 
 uninstall-service: stop-service
 	@echo "Uninstalling ratatoskr LaunchAgent..."
