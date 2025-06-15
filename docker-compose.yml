@@ -1,17 +1,12 @@
 services:
   kafkahq:
-    image: tchiotludo/akhq:0.24.0
-    platform: linux/amd64
-    container_name: kafkahq
-    ports:
-      - "8080:8080"
+    image: tchiotludo/akhq:latest
+    network_mode: "host"
     environment:
       AKHQ_CONFIGURATION: |
         akhq:
           connections:
             docker-kafka-server:
               properties:
-                bootstrap.servers: "192.168.0.55:9092"
+                bootstrap.servers: "${KAFKA_BROKER:-localhost:9092}"
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"

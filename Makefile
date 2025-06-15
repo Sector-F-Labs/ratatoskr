@@ -121,6 +121,7 @@ push:
 		Cargo.toml Cargo.lock \
 		src scripts \
 		Makefile \
+		docker-compose.yml Dockerfile \
 		$(REMOTE_USER)@$(REMOTE_HOST):$(REMOTE_PATH)
 	@echo "Installing binary on remote server..."
 	@ssh $(REMOTE_USER)@$(REMOTE_HOST) "cd $(REMOTE_PATH) && cargo install --path ."
