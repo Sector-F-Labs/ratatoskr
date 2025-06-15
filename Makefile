@@ -3,9 +3,14 @@
 .PHONY: help install setup run dev stop produce test_buttons test_image test_callback test_typing test_typing_demo install-service uninstall-service start-service stop-service status-service
 
 # Kafka config
-KAFKA_BROKER=localhost:9092
+KAFKA_BROKER?=localhost:9092
 KAFKA_IN_TOPIC?=com.sectorflabs.ratatoskr.in
 KAFKA_OUT_TOPIC?=com.sectorflabs.ratatoskr.out
+
+# Export variables so scripts can use them
+export KAFKA_BROKER
+export KAFKA_IN_TOPIC
+export KAFKA_OUT_TOPIC
 
 # Default target - show help
 help:
@@ -66,34 +71,44 @@ stop:
 	pkill -f "kafka" || true
 
 consume:
-	./scripts/consume.sh $(N)
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_IN_TOPIC=$(KAFKA_IN_TOPIC) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/consume.sh $(N)
 
 test_text:
-	./scripts/produce.sh "$(TEXT)"
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce.sh "$(TEXT)"
 
 test_buttons:
-	./scripts/produce_with_buttons.sh "$(TEXT)"
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_with_buttons.sh "$(TEXT)"
 
 test_image:
-	./scripts/produce_image.sh "$(IMAGE_PATH)" "$(CAPTION)"
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_image.sh "$(IMAGE_PATH)" "$(CAPTION)"
 
 test_typing:
-	./scripts/produce_typing.sh
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_typing.sh
 
 test_typing_demo:
-	./scripts/produce_typing_demo.sh
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_typing_demo.sh
 
 test_all_message_types: test_text test_buttons test_image test_typing
 	echo "All message types tested."
 
+debug:
+	@echo "Make variables:"
+	@echo "  KAFKA_BROKER=$(KAFKA_BROKER)"
+	@echo "  KAFKA_IN_TOPIC=$(KAFKA_IN_TOPIC)"
+	@echo "  KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC)"
+	@echo "Environment variables:"
+	@echo "  KAFKA_BROKER=$$KAFKA_BROKER"
+	@echo "  KAFKA_IN_TOPIC=$$KAFKA_IN_TOPIC"
+	@echo "  KAFKA_OUT_TOPIC=$$KAFKA_OUT_TOPIC"
+
 test_callback:
-	./scripts/simulate_callback.sh $(MESSAGE_ID) "$(CALLBACK_DATA)"
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_IN_TOPIC=$(KAFKA_IN_TOPIC) ./scripts/simulate_callback.sh $(MESSAGE_ID) "$(CALLBACK_DATA)"
 
 test_keyboard:
-	./scripts/produce_reply_keyboard.sh "$(TEXT)"
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_reply_keyboard.sh "$(TEXT)"
 
 test_location:
-	./scripts/produce_location_request.sh "$(TEXT)"
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_location_request.sh "$(TEXT)"
 
 # Push to remote server (configurable via .envrc or environment variables)
 REMOTE_HOST?=$(shell echo $$REMOTE_HOST)
