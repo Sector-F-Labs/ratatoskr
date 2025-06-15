@@ -31,7 +31,8 @@ export interface IncomingMessage {
 export type IncomingMessageType =
   | { type: "TelegramMessage"; data: TelegramMessageData }
   | { type: "CallbackQuery"; data: CallbackQueryData }
-  | { type: "MessageReaction"; data: MessageReactionData };
+  | { type: "MessageReaction"; data: MessageReactionData }
+  | { type: "EditedMessage"; data: EditedMessageData };
 
 /**
  * Data for incoming Telegram messages
@@ -64,6 +65,18 @@ export interface MessageReactionData {
   date: string; // ISO 8601 datetime string
   old_reaction: string[]; // emoji strings
   new_reaction: string[]; // emoji strings
+}
+
+/**
+ * Data for edited message events
+ */
+export interface EditedMessageData {
+  /** The edited Telegram message (contains both original and new content) */
+  message: TelegramMessage;
+  /** File attachments with download URLs - files are not downloaded yet */
+  file_attachments: FileInfo[];
+  /** Edit date from Telegram (when the message was edited) */
+  edit_date?: number; // Unix timestamp
 }
 
 /**

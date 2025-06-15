@@ -411,3 +411,268 @@ pub async fn callback_query_handler(
 
     Ok(())
 }
+
+pub async fn edited_message_handler(
+    bot: Bot,
+    msg: Message,
+    producer: Arc<FutureProducer>,
+    kafka_in_topic: KafkaInTopic,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    // Handle file info gathering for all supported file types (same as message_handler)
+    let mut file_infos: Vec<FileInfo> = Vec::new();
+
+    // Handle photos
+    if let Some(photos) = msg.photo() {
+        if let Some(best_photo) = select_best_photo(photos) {
+            let (file, file_type, metadata) = file_info_from_photo(best_photo);
+            tracing::info!(
+                message_id = %msg.id.0,
+                chat_id = %msg.chat.id.0,
+                file_id = %file.id,
+                file_type = "photo",
+                "Getting file info from edited Telegram message"
+            );
+
+            match get_file_info(&bot, &file, file_type, metadata).await {
+                Ok(file_info) => {
+                    file_infos.push(file_info);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        message_id = %msg.id.0,
+                        chat_id = %msg.chat.id.0,
+                        file_id = %file.id,
+                        error = %e,
+                        "Failed to get photo file info from edited message"
+                    );
+                }
+            }
+        }
+    }
+
+    // Handle audio
+    if let Some(audio) = &msg.audio() {
+        let (file, file_type, metadata) = file_info_from_audio(audio);
+        tracing::info!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            file_id = %file.id,
+            file_type = "audio",
+            "Getting file info from edited Telegram message"
+        );
+
+        match get_file_info(&bot, &file, file_type, metadata).await {
+            Ok(file_info) => {
+                file_infos.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to get audio file info from edited message"
+                );
+            }
+        }
+    }
+
+    // Handle voice
+    if let Some(voice) = &msg.voice() {
+        let (file, file_type, metadata) = file_info_from_voice(voice);
+        tracing::info!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            file_id = %file.id,
+            file_type = "voice",
+            "Getting file info from edited Telegram message"
+        );
+
+        match get_file_info(&bot, &file, file_type, metadata).await {
+            Ok(file_info) => {
+                file_infos.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to get voice file info from edited message"
+                );
+            }
+        }
+    }
+
+    // Handle video
+    if let Some(video) = &msg.video() {
+        let (file, file_type, metadata) = file_info_from_video(video);
+        tracing::info!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            file_id = %file.id,
+            file_type = "video",
+            "Getting file info from edited Telegram message"
+        );
+
+        match get_file_info(&bot, &file, file_type, metadata).await {
+            Ok(file_info) => {
+                file_infos.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to get video file info from edited message"
+                );
+            }
+        }
+    }
+
+    // Handle video note
+    if let Some(video_note) = &msg.video_note() {
+        let (file, file_type, metadata) = file_info_from_video_note(video_note);
+        tracing::info!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            file_id = %file.id,
+            file_type = "video_note",
+            "Getting file info from edited Telegram message"
+        );
+
+        match get_file_info(&bot, &file, file_type, metadata).await {
+            Ok(file_info) => {
+                file_infos.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to get video note file info from edited message"
+                );
+            }
+        }
+    }
+
+    // Handle document
+    if let Some(document) = &msg.document() {
+        let (file, file_type, metadata) = file_info_from_document(document);
+        tracing::info!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            file_id = %file.id,
+            file_type = "document",
+            "Getting file info from edited Telegram message"
+        );
+
+        match get_file_info(&bot, &file, file_type, metadata).await {
+            Ok(file_info) => {
+                file_infos.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to get document file info from edited message"
+                );
+            }
+        }
+    }
+
+    // Handle sticker
+    if let Some(sticker) = &msg.sticker() {
+        let (file, file_type, metadata) = file_info_from_sticker(sticker);
+        tracing::info!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            file_id = %file.id,
+            file_type = "sticker",
+            "Getting file info from edited Telegram message"
+        );
+
+        match get_file_info(&bot, &file, file_type, metadata).await {
+            Ok(file_info) => {
+                file_infos.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to get sticker file info from edited message"
+                );
+            }
+        }
+    }
+
+    // Handle animation
+    if let Some(animation) = &msg.animation() {
+        let (file, file_type, metadata) = file_info_from_animation(animation);
+        tracing::info!(
+            message_id = %msg.id.0,
+            chat_id = %msg.chat.id.0,
+            file_id = %file.id,
+            file_type = "animation",
+            "Getting file info from edited Telegram message"
+        );
+
+        match get_file_info(&bot, &file, file_type, metadata).await {
+            Ok(file_info) => {
+                file_infos.push(file_info);
+            }
+            Err(e) => {
+                tracing::error!(
+                    message_id = %msg.id.0,
+                    chat_id = %msg.chat.id.0,
+                    file_id = %file.id,
+                    error = %e,
+                    "Failed to get animation file info from edited message"
+                );
+            }
+        }
+    }
+
+    // Create unified incoming message for edited message
+    let incoming_msg = IncomingMessage::new_edited_message(
+        msg.clone(),
+        file_infos.clone(),
+        msg.edit_date().map(|dt| dt.timestamp() as i32),
+        None, // bot_id - could be retrieved from bot.get_me() if needed
+        None, // bot_username - could be retrieved from bot.get_me() if needed
+    );
+
+    let json = match serde_json::to_string(&incoming_msg) {
+        Ok(json_string) => json_string,
+        Err(e) => {
+            tracing::error!(message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to serialize edited IncomingMessage to JSON");
+            return Err(Box::new(e));
+        }
+    };
+
+    tracing::info!(
+        topic = %kafka_in_topic.0,
+        key = "edited_message",
+        message_id = %msg.id.0,
+        chat_id = %msg.chat.id.0,
+        has_files = %(!file_infos.is_empty()),
+        file_count = %file_infos.len(),
+        edit_date = ?msg.edit_date(),
+        "Sending edited Telegram message to Kafka"
+    );
+    let record = FutureRecord::to(kafka_in_topic.0.as_str())
+        .payload(&json)
+        .key("edited_message");
+
+    if let Err((e, _)) = producer.send(record, None).await {
+        tracing::error!(topic = %kafka_in_topic.0, key = "edited_message", message_id = %msg.id.0, chat_id = %msg.chat.id.0, error = %e, "Failed to send edited message to Kafka");
+        return Err(Box::new(e));
+    }
+    Ok(())
+}

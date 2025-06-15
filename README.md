@@ -227,6 +227,33 @@ All messages from Telegram are wrapped in the unified `IncomingMessage` type:
 }
 ```
 
+#### Edited Message Example
+```json
+{
+  "message_type": {
+    "type": "EditedMessage",
+    "data": {
+      "message": {
+        "message_id": 123,
+        "from": { "id": 456, "first_name": "User", "username": "testuser" },
+        "chat": { "id": 789, "type": "private" },
+        "date": 1678901234,
+        "edit_date": 1678901300,
+        "text": "Hello bot! (edited)"
+      },
+      "file_attachments": [],
+      "edit_date": 1678901300
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "source": {
+    "platform": "telegram",
+    "bot_id": null,
+    "bot_username": null
+  }
+}
+```
+
 ### Outgoing Messages from `KAFKA_OUT_TOPIC` (e.g., `com.sectorflabs.ratatoskr.out`)
 
 All messages to Telegram use the unified `OutgoingMessage` type:
