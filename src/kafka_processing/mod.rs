@@ -1,4 +1,4 @@
-use crate::outgoing::{OutgoingMessage, OutgoingMessageType};
+use self::outgoing::{OutgoingMessage, OutgoingMessageType};
 use crate::utils::{create_markup, create_reply_keyboard};
 use futures_util::StreamExt;
 use rdkafka::consumer::StreamConsumer;
@@ -88,7 +88,19 @@ async fn handle_outgoing_message(
                 };
             }
 
-            if let Some(markup) = create_markup(&data.buttons) {
+            // Auto-organize buttons if they exist
+            let organized_buttons = data.buttons.as_ref().map(|buttons| {
+                if buttons.len() == 1 && buttons[0].len() > 1 {
+                    // If we have a single row with multiple buttons, auto-organize them
+                    tracing::info!(original_buttons = %buttons[0].len(), "Auto-organizing buttons based on text length");
+                    self::outgoing::ButtonInfo::create_inline_keyboard(buttons[0].clone())
+                } else {
+                    // Keep existing organization
+                    buttons.clone()
+                }
+            });
+
+            if let Some(markup) = create_markup(&organized_buttons) {
                 msg_to_send = msg_to_send.reply_markup(markup);
             }
 

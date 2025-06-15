@@ -38,6 +38,8 @@ help:
 	@echo "Testing targets:"
 	@echo "  produce       Send text message (TEXT=\"your message\")"
 	@echo "  test_buttons  Send message with buttons (TEXT=\"your message\")"
+	@echo "  test_auto_buttons  Test auto-organized button functionality"
+	@echo "  test_cafe_buttons  Test auto-organization with real cafe buttons"
 	@echo "  test_image    Send image message (IMAGE_PATH=path CAPTION=\"caption\")"
 	@echo "  test_callback Simulate callback (MESSAGE_ID=123 CALLBACK_DATA=\"data\")"
 	@echo "  test_keyboard Send message with reply keyboard (TEXT=\"your message\")"
@@ -79,6 +81,12 @@ test_text:
 
 test_buttons:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_with_buttons.sh "$(TEXT)"
+
+test_auto_buttons:
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_auto_buttons.sh
+
+test_cafe_buttons:
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_cafe_buttons.sh
 
 test_image:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_image.sh "$(IMAGE_PATH)" "$(CAPTION)"
