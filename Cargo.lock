@@ -1254,6 +1254,7 @@ dependencies = [
  "futures-util",
  "openssl",
  "rdkafka",
+ "regex",
  "reqwest 0.11.27",
  "serde",
  "serde_json",

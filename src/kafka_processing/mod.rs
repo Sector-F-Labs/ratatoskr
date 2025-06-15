@@ -116,12 +116,18 @@ async fn handle_outgoing_message(
             // Try with markdown first, fallback to plain text if parsing fails
             if data.parse_mode.is_some() {
                 let formatted_text = format_telegram_markdown(&data.text);
+                tracing::debug!(
+                    original_length = %data.text.len(),
+                    formatted_length = %formatted_text.len(),
+                    "Formatted text for sending"
+                );
+                tracing::trace!(original_text = %data.text, formatted_text = %formatted_text, "Text formatting details");
                 let mut msg_to_send = bot.send_message(chat_id, formatted_text);
 
                 if let Some(parse_mode) = &data.parse_mode {
                     msg_to_send = match parse_mode.as_str() {
                         "HTML" => msg_to_send.parse_mode(ParseMode::Html),
-                        "Markdown" => msg_to_send.parse_mode(ParseMode::MarkdownV2),
+                        "Markdown" => msg_to_send.parse_mode(ParseMode::Html), // Convert markdown to HTML
                         _ => msg_to_send,
                     };
                 }
@@ -177,7 +183,7 @@ async fn handle_outgoing_message(
                 let mut msg_to_send = bot
                     .send_photo(chat_id, input_file.clone())
                     .caption(formatted_caption)
-                    .parse_mode(ParseMode::MarkdownV2);
+                    .parse_mode(ParseMode::Html);
 
                 if let Some(markup) = create_markup(&data.buttons) {
                     msg_to_send = msg_to_send.reply_markup(markup);
