@@ -31,6 +31,9 @@ pub fn format_telegram_markdown(text: &str) -> String {
     // - Handling nested formatting correctly
     // - Preserving valid Telegram markdown while escaping invalid sequences
 
+    // Convert hadings to bold, so # Heading becomes **Heading**
+    let text = text.replace("# ", "**");
+
     text.to_string()
 }
 
