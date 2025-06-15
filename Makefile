@@ -44,6 +44,7 @@ help:
 	@echo "  test_location Send location request with reply keyboard"
 	@echo "  test_typing   Send typing indicator"
 	@echo "  test_typing_demo Send typing indicator followed by message"
+	@echo "  test_backward_compatibility Test legacy messages without trace_id"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  See .envrc.example for all configuration options"
@@ -109,6 +110,9 @@ test_keyboard:
 
 test_location:
 	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/produce_location_request.sh "$(TEXT)"
+
+test_backward_compatibility:
+	KAFKA_BROKER=$(KAFKA_BROKER) KAFKA_OUT_TOPIC=$(KAFKA_OUT_TOPIC) ./scripts/test_backward_compatibility.sh
 
 # Push to remote server (configurable via .envrc or environment variables)
 REMOTE_HOST?=$(shell echo $$REMOTE_HOST)

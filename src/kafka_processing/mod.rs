@@ -13,6 +13,7 @@ use teloxide::{
     prelude::{Bot, ChatId, Requester},
     types::{InputFile, ParseMode},
 };
+use tracing::Instrument;
 
 pub mod outgoing;
 
@@ -29,9 +30,26 @@ pub async fn start_kafka_consumer_loop(
                 tracing::debug!(topic = %kafka_msg.topic(), partition = %kafka_msg.partition(), offset = %kafka_msg.offset(), "Consumed message from Kafka");
                 if let Some(payload) = kafka_msg.payload() {
                     match serde_json::from_slice::<OutgoingMessage>(payload) {
-                        Ok(out_msg) => {
-                            if let Err(e) =
-                                handle_outgoing_message(&bot_consumer_clone, out_msg).await
+                        Ok(mut out_msg) => {
+                            // Ensure trace_id is set (for backward compatibility)
+                            if out_msg.trace_id.is_nil() {
+                                out_msg.trace_id = uuid::Uuid::new_v4();
+                                tracing::debug!(
+                                    "Generated new trace ID for message without one: {}",
+                                    out_msg.trace_id
+                                );
+                            }
+
+                            let span = tracing::info_span!(
+                                "handle_outgoing_message",
+                                trace_id = %out_msg.trace_id,
+                                chat_id = %out_msg.target.chat_id,
+                                message_type = ?std::mem::discriminant(&out_msg.message_type)
+                            );
+
+                            if let Err(e) = handle_outgoing_message(&bot_consumer_clone, out_msg)
+                                .instrument(span)
+                                .await
                             {
                                 tracing::error!(topic = %kafka_msg.topic(), error = ?e, "Error handling OutgoingMessage");
                             }
@@ -41,8 +59,6 @@ pub async fn start_kafka_consumer_loop(
                             tracing::debug!(raw_payload = ?String::from_utf8_lossy(payload), "Problematic Kafka payload");
                         }
                     }
-                } else {
-                    tracing::warn!(topic = %kafka_msg.topic(), partition = %kafka_msg.partition(), offset = %kafka_msg.offset(), "Received Kafka message with empty payload");
                 }
             }
             Err(e) => {
@@ -61,7 +77,7 @@ async fn handle_outgoing_message(
 
     match message.message_type {
         OutgoingMessageType::TextMessage(data) => {
-            tracing::info!(%chat_id, text_length = %data.text.len(), has_buttons = %data.buttons.is_some(), "Sending text message to Telegram");
+            tracing::info!(text_length = %data.text.len(), has_buttons = %data.buttons.is_some(), "Sending text message to Telegram");
             let mut msg_to_send = bot.send_message(chat_id, data.text);
 
             if let Some(parse_mode) = data.parse_mode {
@@ -84,7 +100,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::ImageMessage(data) => {
-            tracing::info!(%chat_id, image_path = %data.image_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending image message to Telegram");
+            tracing::info!(image_path = %data.image_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending image message to Telegram");
 
             if !Path::new(&data.image_path).exists() {
                 return Err(format!("Image file not found: {}", data.image_path).into());
@@ -109,7 +125,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::AudioMessage(data) => {
-            tracing::info!(%chat_id, audio_path = %data.audio_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending audio message to Telegram");
+            tracing::info!(audio_path = %data.audio_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending audio message to Telegram");
 
             if !Path::new(&data.audio_path).exists() {
                 return Err(format!("Audio file not found: {}", data.audio_path).into());
@@ -146,7 +162,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::VoiceMessage(data) => {
-            tracing::info!(%chat_id, voice_path = %data.voice_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending voice message to Telegram");
+            tracing::info!(voice_path = %data.voice_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending voice message to Telegram");
 
             if !Path::new(&data.voice_path).exists() {
                 return Err(format!("Voice file not found: {}", data.voice_path).into());
@@ -175,7 +191,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::VideoMessage(data) => {
-            tracing::info!(%chat_id, video_path = %data.video_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending video message to Telegram");
+            tracing::info!(video_path = %data.video_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending video message to Telegram");
 
             if !Path::new(&data.video_path).exists() {
                 return Err(format!("Video file not found: {}", data.video_path).into());
@@ -216,7 +232,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::VideoNoteMessage(data) => {
-            tracing::info!(%chat_id, video_note_path = %data.video_note_path, has_buttons = %data.buttons.is_some(), "Sending video note message to Telegram");
+            tracing::info!(video_note_path = %data.video_note_path, has_buttons = %data.buttons.is_some(), "Sending video note message to Telegram");
 
             if !Path::new(&data.video_note_path).exists() {
                 return Err(format!("Video note file not found: {}", data.video_note_path).into());
@@ -245,7 +261,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::StickerMessage(data) => {
-            tracing::info!(%chat_id, sticker_path = %data.sticker_path, has_buttons = %data.buttons.is_some(), "Sending sticker message to Telegram");
+            tracing::info!(sticker_path = %data.sticker_path, has_buttons = %data.buttons.is_some(), "Sending sticker message to Telegram");
 
             if !Path::new(&data.sticker_path).exists() {
                 return Err(format!("Sticker file not found: {}", data.sticker_path).into());
@@ -266,7 +282,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::AnimationMessage(data) => {
-            tracing::info!(%chat_id, animation_path = %data.animation_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending animation message to Telegram");
+            tracing::info!(animation_path = %data.animation_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending animation message to Telegram");
 
             if !Path::new(&data.animation_path).exists() {
                 return Err(format!("Animation file not found: {}", data.animation_path).into());
@@ -303,7 +319,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::DocumentMessage(data) => {
-            tracing::info!(%chat_id, document_path = %data.document_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending document message to Telegram");
+            tracing::info!(document_path = %data.document_path, has_caption = %data.caption.is_some(), has_buttons = %data.buttons.is_some(), "Sending document message to Telegram");
 
             if !Path::new(&data.document_path).exists() {
                 return Err(format!("Document file not found: {}", data.document_path).into());
@@ -333,7 +349,7 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::EditMessage(data) => {
-            tracing::info!(%chat_id, message_id = %data.message_id, has_new_text = %data.new_text.is_some(), has_new_buttons = %data.new_buttons.is_some(), "Editing message in Telegram");
+            tracing::info!(message_id = %data.message_id, has_new_text = %data.new_text.is_some(), has_new_buttons = %data.new_buttons.is_some(), "Editing message in Telegram");
 
             if let Some(new_text) = data.new_text {
                 let mut msg_to_edit = bot.edit_message_text(
@@ -361,14 +377,15 @@ async fn handle_outgoing_message(
         }
 
         OutgoingMessageType::DeleteMessage(data) => {
-            tracing::info!(%chat_id, message_id = %data.message_id, "Deleting message in Telegram");
+            tracing::info!(message_id = %data.message_id, "Deleting message in Telegram");
             bot.delete_message(chat_id, teloxide::types::MessageId(data.message_id))
                 .await?;
         }
 
         OutgoingMessageType::TypingMessage(_data) => {
-            tracing::info!(%chat_id, "Sending typing action to Telegram");
-            bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing).await?;
+            tracing::info!("Sending typing action to Telegram");
+            bot.send_chat_action(chat_id, teloxide::types::ChatAction::Typing)
+                .await?;
         }
     }
 

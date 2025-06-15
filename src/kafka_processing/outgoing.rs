@@ -1,12 +1,20 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 // Unified outgoing message type for the OUT topic
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OutgoingMessage {
+    #[serde(default = "generate_trace_id")]
+    pub trace_id: Uuid,
     pub message_type: OutgoingMessageType,
     pub timestamp: DateTime<Utc>,
     pub target: MessageTarget,
+}
+
+/// Generate a new trace ID for messages that don't have one
+fn generate_trace_id() -> Uuid {
+    Uuid::new_v4()
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -179,4 +187,30 @@ pub struct ReplyKeyboardMarkup {
     pub input_field_placeholder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selective: Option<bool>,
+}
+
+impl OutgoingMessage {
+    /// Create a new OutgoingMessage with a generated trace ID
+    pub fn new(message_type: OutgoingMessageType, target: MessageTarget) -> Self {
+        Self {
+            trace_id: Uuid::new_v4(),
+            message_type,
+            timestamp: Utc::now(),
+            target,
+        }
+    }
+
+    /// Create a new OutgoingMessage with an existing trace ID (for message correlation)
+    pub fn with_trace_id(
+        trace_id: Uuid,
+        message_type: OutgoingMessageType,
+        target: MessageTarget,
+    ) -> Self {
+        Self {
+            trace_id,
+            message_type,
+            timestamp: Utc::now(),
+            target,
+        }
+    }
 }

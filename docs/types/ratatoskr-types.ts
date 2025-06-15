@@ -20,6 +20,7 @@
  * Main wrapper for all incoming messages from Telegram
  */
 export interface IncomingMessage {
+  trace_id?: string; // UUID v4 string for message correlation
   message_type: IncomingMessageType;
   timestamp: string; // ISO 8601 datetime string
   source: MessageSource;
@@ -313,6 +314,7 @@ export type FileMetadata =
  * Main wrapper for all outgoing messages to Telegram
  */
 export interface OutgoingMessage {
+  trace_id?: string; // UUID v4 string for message correlation
   message_type: OutgoingMessageType;
   timestamp: string; // ISO 8601 datetime string
   target: MessageTarget;

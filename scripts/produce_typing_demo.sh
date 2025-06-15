@@ -36,6 +36,7 @@ trap "rm -f $TMP_FILE_TYPING" EXIT
 
 cat > "$TMP_FILE_TYPING" <<EOF
 {
+  "trace_id": "$(uuidgen | tr '[:upper:]' '[:lower:]')",
   "message_type": {
     "type": "TypingMessage",
     "data": {
@@ -70,6 +71,7 @@ trap "rm -f $TMP_FILE_TEXT" EXIT
 
 cat > "$TMP_FILE_TEXT" <<EOF
 {
+  "trace_id": "$(uuidgen | tr '[:upper:]' '[:lower:]')",
   "message_type": {
     "type": "TextMessage",
     "data": {
@@ -91,4 +93,4 @@ echo "$CHAT_ID:$(cat "$TMP_FILE_TEXT" | jq -c .)" | kafka-console-producer --boo
 
 echo "   ✓ Text message sent"
 echo ""
-echo "Demo complete! Check your Telegram chat to see the typing indicator followed by the message." 
+echo "Demo complete! Check your Telegram chat to see the typing indicator followed by the message."

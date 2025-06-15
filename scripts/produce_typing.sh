@@ -31,6 +31,7 @@ trap "rm -f $TMP_FILE" EXIT
 # Create typing message JSON
 cat > "$TMP_FILE" <<EOF
 {
+  "trace_id": "$(uuidgen | tr '[:upper:]' '[:lower:]')",
   "message_type": {
     "type": "TypingMessage",
     "data": {
@@ -54,4 +55,4 @@ echo "Message: $(cat "$TMP_FILE")"
 echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 echo "Typing indicator sent successfully!"
-echo "The bot should now show 'typing...' in chat $CHAT_ID" 
+echo "The bot should now show 'typing...' in chat $CHAT_ID"

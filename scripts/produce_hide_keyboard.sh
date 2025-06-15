@@ -19,6 +19,7 @@ TMP_FILE=$(mktemp)
 # Write the correctly formatted JSON to the temporary file
 cat > "$TMP_FILE" << EOF
 {
+  "trace_id": "$(uuidgen | tr '[:upper:]' '[:lower:]')",
   "message_type": {
     "type": "TextMessage",
     "data": {

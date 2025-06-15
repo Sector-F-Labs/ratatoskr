@@ -7,7 +7,7 @@ use std::sync::Arc;
 use teloxide::dispatching::UpdateFilterExt;
 use teloxide::types::Update;
 use teloxide::{dptree, prelude::*};
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod structs;
 use structs::{ImageStorageDir, KafkaInTopic};
@@ -26,13 +26,10 @@ use kafka_processing::*;
 async fn main() {
     dotenv().ok();
 
-    let subscriber = fmt::Subscriber::builder()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(std::io::stderr)
-        .finish();
-    if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-        eprintln!("Failed to set global default tracing subscriber: {}", e);
-    }
+    tracing_subscriber::registry()
+        .with(fmt::layer().with_writer(std::io::stderr))
+        .with(EnvFilter::from_default_env())
+        .init();
 
     tracing::info!("Starting Ratatoskr bot...");
 

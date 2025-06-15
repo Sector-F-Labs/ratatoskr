@@ -1,10 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use teloxide::types::Message as TelegramMessage;
+use uuid::Uuid;
 
 // Unified incoming message type for the IN topic
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IncomingMessage {
+    pub trace_id: Uuid,
     pub message_type: IncomingMessageType,
     pub timestamp: DateTime<Utc>,
     pub source: MessageSource,
@@ -161,6 +163,7 @@ impl IncomingMessage {
         bot_username: Option<String>,
     ) -> Self {
         Self {
+            trace_id: Uuid::new_v4(),
             message_type: IncomingMessageType::TelegramMessage(TelegramMessageData {
                 message,
                 file_attachments,
@@ -184,6 +187,7 @@ impl IncomingMessage {
         bot_username: Option<String>,
     ) -> Self {
         Self {
+            trace_id: Uuid::new_v4(),
             message_type: IncomingMessageType::CallbackQuery(CallbackQueryData {
                 chat_id,
                 user_id,
@@ -211,6 +215,7 @@ impl IncomingMessage {
         bot_username: Option<String>,
     ) -> Self {
         Self {
+            trace_id: Uuid::new_v4(),
             message_type: IncomingMessageType::MessageReaction(MessageReactionData {
                 chat_id,
                 message_id,
@@ -236,6 +241,7 @@ impl IncomingMessage {
         bot_username: Option<String>,
     ) -> Self {
         Self {
+            trace_id: Uuid::new_v4(),
             message_type: IncomingMessageType::EditedMessage(EditedMessageData {
                 message,
                 file_attachments,
