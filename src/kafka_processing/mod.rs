@@ -1,5 +1,8 @@
 use self::outgoing::{OutgoingMessage, OutgoingMessageType};
-use crate::utils::{create_markup, create_reply_keyboard, format_telegram_markdown};
+use crate::utils::{
+    create_markup, create_reply_keyboard, format_telegram_markdown, split_text,
+    CAPTION_LIMIT, TEXT_LIMIT,
+};
 use futures_util::StreamExt;
 use rdkafka::consumer::StreamConsumer;
 use rdkafka::message::Message as KafkaMessageRd;
@@ -99,72 +102,86 @@ async fn handle_outgoing_message(
 
     match message.message_type {
         OutgoingMessageType::TextMessage(data) => {
-            tracing::info!(text_length = %data.text.len(), has_buttons = %data.buttons.is_some(), "Sending text message to Telegram");
+            tracing::info!(
+                text_length = %data.text.len(),
+                has_buttons = %data.buttons.is_some(),
+                "Sending text message to Telegram"
+            );
 
             // Auto-organize buttons if they exist
             let organized_buttons = data.buttons.as_ref().map(|buttons| {
                 if buttons.len() == 1 && buttons[0].len() > 1 {
-                    // If we have a single row with multiple buttons, auto-organize them
-                    tracing::info!(original_buttons = %buttons[0].len(), "Auto-organizing buttons based on text length");
+                    tracing::info!(
+                        original_buttons = %buttons[0].len(),
+                        "Auto-organizing buttons based on text length"
+                    );
                     self::outgoing::ButtonInfo::create_inline_keyboard(buttons[0].clone())
                 } else {
-                    // Keep existing organization
                     buttons.clone()
                 }
             });
 
-            // Try with markdown first, fallback to plain text if parsing fails
-            if data.parse_mode.is_some() {
-                let formatted_text = format_telegram_markdown(&data.text);
-                tracing::debug!(
-                    original_length = %data.text.len(),
-                    formatted_length = %formatted_text.len(),
-                    "Formatted text for sending"
-                );
-                tracing::trace!(original_text = %data.text, formatted_text = %formatted_text, "Text formatting details");
-                let mut msg_to_send = bot.send_message(chat_id, formatted_text);
+            let formatted_text = if data.parse_mode.is_some() {
+                Some(format_telegram_markdown(&data.text))
+            } else {
+                None
+            };
+
+            let formatted_chunks = if let Some(ref ft) = formatted_text {
+                split_text(ft, TEXT_LIMIT)
+            } else {
+                split_text(&data.text, TEXT_LIMIT)
+            };
+            let plain_chunks = split_text(&data.text, TEXT_LIMIT);
+
+            for (idx, chunk) in formatted_chunks.iter().enumerate() {
+                let plain_chunk = plain_chunks
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| chunk.clone());
+
+                let mut msg_to_send = bot.send_message(chat_id, chunk.clone());
 
                 if let Some(parse_mode) = &data.parse_mode {
                     msg_to_send = match parse_mode.as_str() {
                         "HTML" => msg_to_send.parse_mode(ParseMode::Html),
-                        "Markdown" => msg_to_send.parse_mode(ParseMode::Html), // Convert markdown to HTML
+                        "Markdown" => msg_to_send.parse_mode(ParseMode::Html),
                         _ => msg_to_send,
                     };
                 }
 
-                if let Some(markup) = create_markup(&organized_buttons) {
-                    msg_to_send = msg_to_send.reply_markup(markup);
-                }
-
-                if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
-                    msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+                if idx == 0 {
+                    if let Some(markup) = create_markup(&organized_buttons) {
+                        msg_to_send = msg_to_send.reply_markup(markup);
+                    }
+                    if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                        msg_to_send = msg_to_send.reply_markup(reply_keyboard);
+                    }
+                    if let Some(disable) = data.disable_web_page_preview {
+                        msg_to_send = msg_to_send.disable_web_page_preview(disable);
+                    }
                 }
 
                 try_send_with_fallback(
                     msg_to_send.await,
                     || async {
-                        let mut plain_msg = bot.send_message(chat_id, &data.text);
-                        if let Some(markup) = create_markup(&organized_buttons) {
-                            plain_msg = plain_msg.reply_markup(markup);
-                        }
-                        if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
-                            plain_msg = plain_msg.reply_markup(reply_keyboard);
+                        let mut plain_msg = bot.send_message(chat_id, plain_chunk.clone());
+                        if idx == 0 {
+                            if let Some(markup) = create_markup(&organized_buttons) {
+                                plain_msg = plain_msg.reply_markup(markup);
+                            }
+                            if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                                plain_msg = plain_msg.reply_markup(reply_keyboard);
+                            }
+                            if let Some(disable) = data.disable_web_page_preview {
+                                plain_msg = plain_msg.disable_web_page_preview(disable);
+                            }
                         }
                         plain_msg.await
                     },
                     "text message",
                 )
                 .await?;
-            } else {
-                // No parse mode, send as plain text
-                let mut msg_to_send = bot.send_message(chat_id, &data.text);
-                if let Some(markup) = create_markup(&organized_buttons) {
-                    msg_to_send = msg_to_send.reply_markup(markup);
-                }
-                if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
-                    msg_to_send = msg_to_send.reply_markup(reply_keyboard);
-                }
-                msg_to_send.await?;
             }
         }
 
@@ -177,12 +194,17 @@ async fn handle_outgoing_message(
 
             let input_file = InputFile::file(&data.image_path);
 
-            // Try with markdown caption first, fallback to plain text if parsing fails
             if let Some(caption) = &data.caption {
                 let formatted_caption = format_telegram_markdown(caption);
+                let formatted_chunks = split_text(&formatted_caption, CAPTION_LIMIT);
+                let plain_chunks = split_text(caption, CAPTION_LIMIT);
+
+                let first_formatted = formatted_chunks.first().cloned().unwrap_or_default();
+                let first_plain = plain_chunks.first().cloned().unwrap_or_default();
+
                 let mut msg_to_send = bot
                     .send_photo(chat_id, input_file.clone())
-                    .caption(formatted_caption)
+                    .caption(first_formatted)
                     .parse_mode(ParseMode::Html);
 
                 if let Some(markup) = create_markup(&data.buttons) {
@@ -197,7 +219,7 @@ async fn handle_outgoing_message(
                     msg_to_send.await,
                     || async {
                         let mut plain_msg =
-                            bot.send_photo(chat_id, input_file.clone()).caption(caption);
+                            bot.send_photo(chat_id, input_file.clone()).caption(first_plain.clone());
                         if let Some(markup) = create_markup(&data.buttons) {
                             plain_msg = plain_msg.reply_markup(markup);
                         }
@@ -209,6 +231,19 @@ async fn handle_outgoing_message(
                     "image message",
                 )
                 .await?;
+
+                for i in 1..formatted_chunks.len() {
+                    let follow_formatted = formatted_chunks[i].clone();
+                    let follow_plain = plain_chunks.get(i).cloned().unwrap_or_else(|| follow_formatted.clone());
+                    try_send_with_fallback(
+                        bot.send_message(chat_id, follow_formatted)
+                            .parse_mode(ParseMode::Html)
+                            .await,
+                        || async { bot.send_message(chat_id, follow_plain).await },
+                        "caption continuation",
+                    )
+                    .await?;
+                }
             } else {
                 // No caption, send without formatting
                 let mut msg_to_send = bot.send_photo(chat_id, input_file);
@@ -233,11 +268,19 @@ async fn handle_outgoing_message(
             }
 
             let input_file = InputFile::file(&data.audio_path);
-            let mut msg_to_send = bot.send_audio(chat_id, input_file);
+            let mut msg_to_send = bot.send_audio(chat_id, input_file.clone());
 
-            if let Some(caption) = data.caption {
-                let formatted_caption = format_telegram_markdown(&caption);
-                msg_to_send = msg_to_send.caption(formatted_caption);
+            let caption_chunks = data
+                .caption
+                .as_ref()
+                .map(|c| split_text(&format_telegram_markdown(c), CAPTION_LIMIT));
+            let caption_plain_chunks =
+                data.caption.as_ref().map(|c| split_text(c, CAPTION_LIMIT));
+
+            if let Some(chunks) = caption_chunks.as_ref() {
+                if let Some(first) = chunks.first() {
+                    msg_to_send = msg_to_send.caption(first.clone());
+                }
             }
 
             if let Some(duration) = data.duration {
@@ -260,7 +303,44 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            try_send_with_fallback(
+                msg_to_send.await,
+                || async {
+                    let mut plain = bot.send_audio(chat_id, input_file.clone());
+                    if let Some(first_plain) = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.first())
+                    {
+                        plain = plain.caption(first_plain.clone());
+                    }
+                    if let Some(markup) = create_markup(&data.buttons) {
+                        plain = plain.reply_markup(markup);
+                    }
+                    if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                        plain = plain.reply_markup(reply_keyboard);
+                    }
+                    plain.await
+                },
+                "audio message",
+            )
+            .await?;
+
+            if let Some(chunks) = caption_chunks {
+                for i in 1..chunks.len() {
+                    let follow_formatted = chunks[i].clone();
+                    let follow_plain = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.get(i))
+                        .cloned()
+                        .unwrap_or_else(|| follow_formatted.clone());
+                    try_send_with_fallback(
+                        bot.send_message(chat_id, follow_formatted).parse_mode(ParseMode::Html).await,
+                        || async { bot.send_message(chat_id, follow_plain).await },
+                        "caption continuation",
+                    )
+                    .await?;
+                }
+            }
         }
 
         OutgoingMessageType::VoiceMessage(data) => {
@@ -271,11 +351,19 @@ async fn handle_outgoing_message(
             }
 
             let input_file = InputFile::file(&data.voice_path);
-            let mut msg_to_send = bot.send_voice(chat_id, input_file);
+            let mut msg_to_send = bot.send_voice(chat_id, input_file.clone());
 
-            if let Some(caption) = data.caption {
-                let formatted_caption = format_telegram_markdown(&caption);
-                msg_to_send = msg_to_send.caption(formatted_caption);
+            let caption_chunks = data
+                .caption
+                .as_ref()
+                .map(|c| split_text(&format_telegram_markdown(c), CAPTION_LIMIT));
+            let caption_plain_chunks =
+                data.caption.as_ref().map(|c| split_text(c, CAPTION_LIMIT));
+
+            if let Some(chunks) = caption_chunks.as_ref() {
+                if let Some(first) = chunks.first() {
+                    msg_to_send = msg_to_send.caption(first.clone());
+                }
             }
 
             if let Some(duration) = data.duration {
@@ -290,7 +378,44 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            try_send_with_fallback(
+                msg_to_send.await,
+                || async {
+                    let mut plain = bot.send_voice(chat_id, input_file.clone());
+                    if let Some(first_plain) = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.first())
+                    {
+                        plain = plain.caption(first_plain.clone());
+                    }
+                    if let Some(markup) = create_markup(&data.buttons) {
+                        plain = plain.reply_markup(markup);
+                    }
+                    if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                        plain = plain.reply_markup(reply_keyboard);
+                    }
+                    plain.await
+                },
+                "voice message",
+            )
+            .await?;
+
+            if let Some(chunks) = caption_chunks {
+                for i in 1..chunks.len() {
+                    let follow_formatted = chunks[i].clone();
+                    let follow_plain = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.get(i))
+                        .cloned()
+                        .unwrap_or_else(|| follow_formatted.clone());
+                    try_send_with_fallback(
+                        bot.send_message(chat_id, follow_formatted).parse_mode(ParseMode::Html).await,
+                        || async { bot.send_message(chat_id, follow_plain).await },
+                        "caption continuation",
+                    )
+                    .await?;
+                }
+            }
         }
 
         OutgoingMessageType::VideoMessage(data) => {
@@ -301,11 +426,19 @@ async fn handle_outgoing_message(
             }
 
             let input_file = InputFile::file(&data.video_path);
-            let mut msg_to_send = bot.send_video(chat_id, input_file);
+            let mut msg_to_send = bot.send_video(chat_id, input_file.clone());
 
-            if let Some(caption) = data.caption {
-                let formatted_caption = format_telegram_markdown(&caption);
-                msg_to_send = msg_to_send.caption(formatted_caption);
+            let caption_chunks = data
+                .caption
+                .as_ref()
+                .map(|c| split_text(&format_telegram_markdown(c), CAPTION_LIMIT));
+            let caption_plain_chunks =
+                data.caption.as_ref().map(|c| split_text(c, CAPTION_LIMIT));
+
+            if let Some(chunks) = caption_chunks.as_ref() {
+                if let Some(first) = chunks.first() {
+                    msg_to_send = msg_to_send.caption(first.clone());
+                }
             }
 
             if let Some(duration) = data.duration {
@@ -332,7 +465,56 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            try_send_with_fallback(
+                msg_to_send.await,
+                || async {
+                    let mut plain = bot.send_video(chat_id, input_file.clone());
+                    if let Some(first_plain) = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.first())
+                    {
+                        plain = plain.caption(first_plain.clone());
+                    }
+                    if let Some(duration) = data.duration {
+                        plain = plain.duration(duration);
+                    }
+                    if let Some(width) = data.width {
+                        plain = plain.width(width);
+                    }
+                    if let Some(height) = data.height {
+                        plain = plain.height(height);
+                    }
+                    if let Some(supports_streaming) = data.supports_streaming {
+                        plain = plain.supports_streaming(supports_streaming);
+                    }
+                    if let Some(markup) = create_markup(&data.buttons) {
+                        plain = plain.reply_markup(markup);
+                    }
+                    if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                        plain = plain.reply_markup(reply_keyboard);
+                    }
+                    plain.await
+                },
+                "video message",
+            )
+            .await?;
+
+            if let Some(chunks) = caption_chunks {
+                for i in 1..chunks.len() {
+                    let follow_formatted = chunks[i].clone();
+                    let follow_plain = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.get(i))
+                        .cloned()
+                        .unwrap_or_else(|| follow_formatted.clone());
+                    try_send_with_fallback(
+                        bot.send_message(chat_id, follow_formatted).parse_mode(ParseMode::Html).await,
+                        || async { bot.send_message(chat_id, follow_plain).await },
+                        "caption continuation",
+                    )
+                    .await?;
+                }
+            }
         }
 
         OutgoingMessageType::VideoNoteMessage(data) => {
@@ -361,7 +543,53 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            try_send_with_fallback(
+                msg_to_send.await,
+                || async {
+                    let mut plain = bot.send_animation(chat_id, input_file.clone());
+                    if let Some(first_plain) = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.first())
+                    {
+                        plain = plain.caption(first_plain.clone());
+                    }
+                    if let Some(duration) = data.duration {
+                        plain = plain.duration(duration);
+                    }
+                    if let Some(width) = data.width {
+                        plain = plain.width(width);
+                    }
+                    if let Some(height) = data.height {
+                        plain = plain.height(height);
+                    }
+                    if let Some(markup) = create_markup(&data.buttons) {
+                        plain = plain.reply_markup(markup);
+                    }
+                    if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                        plain = plain.reply_markup(reply_keyboard);
+                    }
+                    plain.await
+                },
+                "animation message",
+            )
+            .await?;
+
+            if let Some(chunks) = caption_chunks {
+                for i in 1..chunks.len() {
+                    let follow_formatted = chunks[i].clone();
+                    let follow_plain = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.get(i))
+                        .cloned()
+                        .unwrap_or_else(|| follow_formatted.clone());
+                    try_send_with_fallback(
+                        bot.send_message(chat_id, follow_formatted).parse_mode(ParseMode::Html).await,
+                        || async { bot.send_message(chat_id, follow_plain).await },
+                        "caption continuation",
+                    )
+                    .await?;
+                }
+            }
         }
 
         OutgoingMessageType::StickerMessage(data) => {
@@ -382,7 +610,44 @@ async fn handle_outgoing_message(
                 msg_to_send = msg_to_send.reply_markup(reply_keyboard);
             }
 
-            msg_to_send.await?;
+            try_send_with_fallback(
+                msg_to_send.await,
+                || async {
+                    let mut plain = bot.send_document(chat_id, input_file.clone());
+                    if let Some(first_plain) = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.first())
+                    {
+                        plain = plain.caption(first_plain.clone());
+                    }
+                    if let Some(markup) = create_markup(&data.buttons) {
+                        plain = plain.reply_markup(markup);
+                    }
+                    if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
+                        plain = plain.reply_markup(reply_keyboard);
+                    }
+                    plain.await
+                },
+                "document message",
+            )
+            .await?;
+
+            if let Some(chunks) = caption_chunks {
+                for i in 1..chunks.len() {
+                    let follow_formatted = chunks[i].clone();
+                    let follow_plain = caption_plain_chunks
+                        .as_ref()
+                        .and_then(|v| v.get(i))
+                        .cloned()
+                        .unwrap_or_else(|| follow_formatted.clone());
+                    try_send_with_fallback(
+                        bot.send_message(chat_id, follow_formatted).parse_mode(ParseMode::Html).await,
+                        || async { bot.send_message(chat_id, follow_plain).await },
+                        "caption continuation",
+                    )
+                    .await?;
+                }
+            }
         }
 
         OutgoingMessageType::AnimationMessage(data) => {
@@ -393,11 +658,19 @@ async fn handle_outgoing_message(
             }
 
             let input_file = InputFile::file(&data.animation_path);
-            let mut msg_to_send = bot.send_animation(chat_id, input_file);
+            let mut msg_to_send = bot.send_animation(chat_id, input_file.clone());
 
-            if let Some(caption) = data.caption {
-                let formatted_caption = format_telegram_markdown(&caption);
-                msg_to_send = msg_to_send.caption(formatted_caption);
+            let caption_chunks = data
+                .caption
+                .as_ref()
+                .map(|c| split_text(&format_telegram_markdown(c), CAPTION_LIMIT));
+            let caption_plain_chunks =
+                data.caption.as_ref().map(|c| split_text(c, CAPTION_LIMIT));
+
+            if let Some(chunks) = caption_chunks.as_ref() {
+                if let Some(first) = chunks.first() {
+                    msg_to_send = msg_to_send.caption(first.clone());
+                }
             }
 
             if let Some(duration) = data.duration {
@@ -436,11 +709,19 @@ async fn handle_outgoing_message(
                 InputFile::file(&data.document_path)
             };
 
-            let mut msg_to_send = bot.send_document(chat_id, input_file);
+            let mut msg_to_send = bot.send_document(chat_id, input_file.clone());
 
-            if let Some(caption) = data.caption {
-                let formatted_caption = format_telegram_markdown(&caption);
-                msg_to_send = msg_to_send.caption(formatted_caption);
+            let caption_chunks = data
+                .caption
+                .as_ref()
+                .map(|c| split_text(&format_telegram_markdown(c), CAPTION_LIMIT));
+            let caption_plain_chunks =
+                data.caption.as_ref().map(|c| split_text(c, CAPTION_LIMIT));
+
+            if let Some(chunks) = caption_chunks.as_ref() {
+                if let Some(first) = chunks.first() {
+                    msg_to_send = msg_to_send.caption(first.clone());
+                }
             }
 
             if let Some(markup) = create_markup(&data.buttons) {
