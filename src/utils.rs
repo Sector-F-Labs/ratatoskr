@@ -10,6 +10,11 @@ use teloxide::types::{
     Sticker, Video, VideoNote, Voice,
 };
 
+/// Maximum allowed characters in a Telegram text message
+pub const TEXT_LIMIT: usize = 4096;
+/// Maximum allowed characters in a Telegram caption
+pub const CAPTION_LIMIT: usize = 1024;
+
 /// Escapes HTML characters but preserves allowed Telegram HTML tags
 fn escape_html_except_tags(text: &str) -> String {
     // First, temporarily replace our allowed tags with placeholders
@@ -536,6 +541,50 @@ pub fn file_info_from_animation(animation: &Animation) -> (FileMeta, FileType, F
     )
 }
 
+/// Split long text into chunks that respect the given limit.
+///
+/// The function tries to break on spaces or newline boundaries so that words
+/// are not cut in the middle. If a single word exceeds the limit it will be
+/// split at the limit boundary.
+pub fn split_text(text: &str, limit: usize) -> Vec<String> {
+    if text.is_empty() {
+        return Vec::new();
+    }
+
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+
+    for token in text.split_inclusive(|c: char| c == ' ' || c == '\n') {
+        if token.len() > limit {
+            if !current.is_empty() {
+                chunks.push(current.clone());
+                current.clear();
+            }
+            let mut start = 0;
+            let chars: Vec<char> = token.chars().collect();
+            while start < chars.len() {
+                let end = usize::min(start + limit, chars.len());
+                chunks.push(chars[start..end].iter().collect());
+                start = end;
+            }
+            continue;
+        }
+
+        if current.len() + token.len() > limit {
+            chunks.push(current.clone());
+            current.clear();
+        }
+
+        current.push_str(token);
+    }
+
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+
+    chunks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -619,5 +668,27 @@ mod tests {
         println!("\nOutput:\n{}", result);
         // Just test that it doesn't panic and produces some output
         assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_split_text_basic() {
+        let text = "hello world";
+        let chunks = split_text(text, 4096);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], "hello world");
+    }
+
+    #[test]
+    fn test_split_text_respects_limit() {
+        let text = "one two three four";
+        let chunks = split_text(text, 8);
+        assert_eq!(chunks, vec![
+            "one two ".to_string(),
+            "three ".to_string(),
+            "four".to_string(),
+        ]);
+        for c in chunks {
+            assert!(c.len() <= 8);
+        }
     }
 }

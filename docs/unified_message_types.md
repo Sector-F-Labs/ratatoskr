@@ -173,10 +173,12 @@ Send text messages with optional formatting and buttons
   "target": {
     "platform": "telegram",
     "chat_id": 123456789,
-    "thread_id": null
+  "thread_id": null
   }
 }
 ```
+
+Longer texts are automatically split into multiple messages if they exceed 4096 characters.
 
 #### 2. ImageMessage
 Send images stored on the local filesystem
@@ -197,10 +199,12 @@ Send images stored on the local filesystem
   "target": {
     "platform": "telegram",
     "chat_id": 123456789,
-    "thread_id": null
+  "thread_id": null
   }
 }
 ```
+
+If a caption is longer than 1024 characters, the remaining text is sent as follow-up messages after the media.
 
 #### 3. DocumentMessage
 Send documents/files stored on the local filesystem
