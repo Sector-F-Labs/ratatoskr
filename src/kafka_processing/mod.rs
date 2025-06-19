@@ -1,9 +1,9 @@
 use self::outgoing::{OutgoingMessage, OutgoingMessageType};
+use crate::broker::MessageBroker;
 use crate::utils::{create_markup, create_reply_keyboard, format_telegram_markdown};
 use futures_util::StreamExt;
-use crate::broker::MessageBroker;
-use std::sync::Arc;
 use std::path::Path;
+use std::sync::Arc;
 use teloxide::{
     payloads::{
         EditMessageReplyMarkupSetters, EditMessageTextSetters, SendAnimationSetters,
@@ -54,22 +54,22 @@ pub async fn start_broker_consumer_loop(
     };
     while let Some(payload) = stream.next().await {
         match serde_json::from_slice::<OutgoingMessage>(&payload) {
-                        Ok(mut out_msg) => {
-                            // Ensure trace_id is set (for backward compatibility)
-                            if out_msg.trace_id.is_nil() {
-                                out_msg.trace_id = uuid::Uuid::new_v4();
-                                tracing::debug!(
-                                    "Generated new trace ID for message without one: {}",
-                                    out_msg.trace_id
-                                );
-                            }
+            Ok(mut out_msg) => {
+                // Ensure trace_id is set (for backward compatibility)
+                if out_msg.trace_id.is_nil() {
+                    out_msg.trace_id = uuid::Uuid::new_v4();
+                    tracing::debug!(
+                        "Generated new trace ID for message without one: {}",
+                        out_msg.trace_id
+                    );
+                }
 
-                            let span = tracing::info_span!(
-                                "handle_outgoing_message",
-                                trace_id = %out_msg.trace_id,
-                                chat_id = %out_msg.target.chat_id,
-                                message_type = ?std::mem::discriminant(&out_msg.message_type)
-                            );
+                let span = tracing::info_span!(
+                    "handle_outgoing_message",
+                    trace_id = %out_msg.trace_id,
+                    chat_id = %out_msg.target.chat_id,
+                    message_type = ?std::mem::discriminant(&out_msg.message_type)
+                );
 
                 if let Err(e) = handle_outgoing_message(&bot_consumer_clone, out_msg)
                     .instrument(span)

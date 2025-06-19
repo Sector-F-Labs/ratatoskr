@@ -1,3 +1,4 @@
+use crate::broker::MessageBroker;
 use crate::structs::{ImageStorageDir, KafkaInTopic};
 use crate::utils::{
     file_info_from_animation, file_info_from_audio, file_info_from_document, file_info_from_photo,
@@ -6,7 +7,6 @@ use crate::utils::{
 };
 use anyhow::Result;
 use incoming::{FileInfo, IncomingMessage};
-use crate::broker::MessageBroker;
 use std::sync::Arc;
 use teloxide::prelude::{Bot, CallbackQuery, Message, Requester};
 use teloxide::types::MessageReactionUpdated;
