@@ -1,11 +1,11 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, QoS};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
-use futures_util::StreamExt;
 
-use crate::broker::{MessageBroker, BoxStream};
+use crate::broker::{BoxStream, MessageBroker};
 use std::sync::Arc;
 
 pub struct MqttBroker {
@@ -44,14 +44,20 @@ impl MqttBroker {
                 }
             }
         });
-        Ok(Self { client, sender: tx, eventloop })
+        Ok(Self {
+            client,
+            sender: tx,
+            eventloop,
+        })
     }
 }
 
 #[async_trait]
 impl MessageBroker for MqttBroker {
     async fn publish(&self, topic: &str, payload: &[u8]) -> Result<()> {
-        self.client.publish(topic, QoS::AtLeastOnce, false, payload).await?;
+        self.client
+            .publish(topic, QoS::AtLeastOnce, false, payload)
+            .await?;
         Ok(())
     }
 

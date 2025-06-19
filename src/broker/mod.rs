@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use tokio_stream::Stream;
 use std::pin::Pin;
+use tokio_stream::Stream;
 
 pub type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + 'a>>;
 

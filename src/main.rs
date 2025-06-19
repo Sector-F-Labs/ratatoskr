@@ -17,7 +17,7 @@ use telegram_handler::{
 mod utils;
 
 mod broker;
-use broker::{kafka::KafkaBroker, mqtt::MqttBroker, MessageBroker};
+use broker::{MessageBroker, kafka::KafkaBroker, mqtt::MqttBroker};
 mod kafka_processing;
 use kafka_processing::*;
 
@@ -63,13 +63,22 @@ async fn main() {
 
     let (broker, in_topic_val, out_topic_val): (Arc<dyn MessageBroker>, String, String) =
         if broker_type.to_lowercase() == "mqtt" {
-            let mqtt_broker_addr = env::var("MQTT_BROKER").unwrap_or_else(|_| "localhost:1883".to_string());
-            let mqtt_in_topic = env::var("MQTT_IN_TOPIC").unwrap_or_else(|_| "com.sectorflabs.ratatoskr.in".to_string());
-            let mqtt_out_topic = env::var("MQTT_OUT_TOPIC").unwrap_or_else(|_| "com.sectorflabs.ratatoskr.out".to_string());
-            let broker = Arc::new(MqttBroker::new(&mqtt_broker_addr).await.expect("Failed to create MQTT broker")) as Arc<dyn MessageBroker>;
+            let mqtt_broker_addr =
+                env::var("MQTT_BROKER").unwrap_or_else(|_| "localhost:1883".to_string());
+            let mqtt_in_topic = env::var("MQTT_IN_TOPIC")
+                .unwrap_or_else(|_| "com.sectorflabs.ratatoskr.in".to_string());
+            let mqtt_out_topic = env::var("MQTT_OUT_TOPIC")
+                .unwrap_or_else(|_| "com.sectorflabs.ratatoskr.out".to_string());
+            let broker = Arc::new(
+                MqttBroker::new(&mqtt_broker_addr)
+                    .await
+                    .expect("Failed to create MQTT broker"),
+            ) as Arc<dyn MessageBroker>;
             (broker, mqtt_in_topic, mqtt_out_topic)
         } else {
-            let broker = Arc::new(KafkaBroker::new(&kafka_broker).expect("Failed to create Kafka broker")) as Arc<dyn MessageBroker>;
+            let broker =
+                Arc::new(KafkaBroker::new(&kafka_broker).expect("Failed to create Kafka broker"))
+                    as Arc<dyn MessageBroker>;
             (broker, kafka_in_topic_val.clone(), kafka_out_topic.clone())
         };
 
