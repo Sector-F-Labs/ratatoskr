@@ -9,8 +9,8 @@ A lightweight Telegram <-> Kafka bridge written in **Rust**, designed to decoupl
 ## 🚀 Features
 
 * Uses [`teloxide`](https://github.com/teloxide/teloxide) for Telegram bot integration
-* Uses [`rdkafka`](https://github.com/fede1024/rust-rdkafka) for Kafka connectivity
-* Forwards full Telegram message objects to Kafka
+* Supports Kafka via [`rdkafka`](https://github.com/fede1024/rust-rdkafka) and MQTT via [`rumqttc`](https://github.com/bytebeamio/rumqtt)
+* Forwards full Telegram message objects to the selected broker
 * **Automatic image downloading** - Downloads images from Telegram messages and stores them locally ([documentation](docs/image_downloading.md))
 * Listens for outbound messages on a Kafka topic and sends them back to Telegram
 * Minimal, event-driven, and easy to extend
@@ -35,9 +35,10 @@ A lightweight Telegram <-> Kafka bridge written in **Rust**, designed to decoupl
 2. **Set environment variables:**
 
    * `TELEGRAM_BOT_TOKEN` (**required**)
-   * `KAFKA_BROKER` (optional, default: `localhost:9092`)
-   * `KAFKA_IN_TOPIC` (optional, default: `com.sectorflabs.ratatoskr.in`)
-   * `KAFKA_OUT_TOPIC` (optional, default: `com.sectorflabs.ratatoskr.out`)
+   * `BROKER_TYPE` (optional, `kafka` or `mqtt`, default: `kafka`)
+   * `KAFKA_BROKER` / `MQTT_BROKER` (broker address)
+   * `KAFKA_IN_TOPIC` / `MQTT_IN_TOPIC` (incoming topic)
+   * `KAFKA_OUT_TOPIC` / `MQTT_OUT_TOPIC` (outgoing topic)
    * `IMAGE_STORAGE_DIR` (optional, default: `./images`)
 
    You can place these in a `.env` file or export them in your shell. A `.env.example` file is provided as a template.
@@ -133,6 +134,12 @@ For a complete development environment with Kafka, Zookeeper, and Kafdrop (a Kaf
    - Ratatoskr: Running in container
    - Kafka: localhost:9092
    - Kafdrop (Kafka UI): http://localhost:9000
+
+Alternatively, to try the MQTT backend, run:
+
+```sh
+docker compose -f mqtt-stack.yml up -d
+```
 
 
 ---

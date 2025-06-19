@@ -1,8 +1,8 @@
 use self::outgoing::{OutgoingMessage, OutgoingMessageType};
 use crate::utils::{create_markup, create_reply_keyboard, format_telegram_markdown};
 use futures_util::StreamExt;
-use rdkafka::consumer::StreamConsumer;
-use rdkafka::message::Message as KafkaMessageRd;
+use crate::broker::MessageBroker;
+use std::sync::Arc;
 use std::path::Path;
 use teloxide::{
     payloads::{
@@ -39,19 +39,21 @@ where
     }
 }
 
-pub async fn start_kafka_consumer_loop(
+pub async fn start_broker_consumer_loop(
     bot_consumer_clone: Bot,
-    consumer: StreamConsumer,
-    kafka_out_topic_clone: String,
+    broker: Arc<dyn MessageBroker>,
+    out_topic_clone: String,
 ) {
-    tracing::info!(topic = %kafka_out_topic_clone, "Starting Kafka consumer stream for Telegram output...");
-    let mut stream = consumer.stream();
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(kafka_msg) => {
-                tracing::debug!(topic = %kafka_msg.topic(), partition = %kafka_msg.partition(), offset = %kafka_msg.offset(), "Consumed message from Kafka");
-                if let Some(payload) = kafka_msg.payload() {
-                    match serde_json::from_slice::<OutgoingMessage>(payload) {
+    tracing::info!(topic = %out_topic_clone, "Starting broker consumer stream for Telegram output...");
+    let mut stream = match broker.subscribe(&out_topic_clone).await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(topic = %out_topic_clone, error = %e, "Failed to subscribe to broker topic");
+            return;
+        }
+    };
+    while let Some(payload) = stream.next().await {
+        match serde_json::from_slice::<OutgoingMessage>(&payload) {
                         Ok(mut out_msg) => {
                             // Ensure trace_id is set (for backward compatibility)
                             if out_msg.trace_id.is_nil() {
@@ -69,26 +71,20 @@ pub async fn start_kafka_consumer_loop(
                                 message_type = ?std::mem::discriminant(&out_msg.message_type)
                             );
 
-                            if let Err(e) = handle_outgoing_message(&bot_consumer_clone, out_msg)
-                                .instrument(span)
-                                .await
-                            {
-                                tracing::error!(topic = %kafka_msg.topic(), error = ?e, "Error handling OutgoingMessage");
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(topic = %kafka_msg.topic(), error = %e, "Error deserializing message from Kafka payload");
-                            tracing::debug!(raw_payload = ?String::from_utf8_lossy(payload), "Problematic Kafka payload");
-                        }
-                    }
+                if let Err(e) = handle_outgoing_message(&bot_consumer_clone, out_msg)
+                    .instrument(span)
+                    .await
+                {
+                    tracing::error!(error = ?e, "Error handling OutgoingMessage");
                 }
             }
             Err(e) => {
-                tracing::error!(topic = %kafka_out_topic_clone, error = %e, "Error consuming message from Kafka");
+                tracing::error!(error = %e, "Error deserializing message from broker payload");
+                tracing::debug!(raw_payload = ?String::from_utf8_lossy(&payload), "Problematic broker payload");
             }
         }
     }
-    tracing::warn!(topic = %kafka_out_topic_clone, "Kafka consumer stream ended.");
+    tracing::warn!(topic = %out_topic_clone, "Broker consumer stream ended.");
 }
 
 async fn handle_outgoing_message(

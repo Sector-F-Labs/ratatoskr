@@ -5,10 +5,18 @@
 # Telegram Bot Configuration
 export TELEGRAM_BOT_TOKEN="your_bot_token_here"
 
+# Broker Configuration
+export BROKER_TYPE="kafka"
+
 # Kafka Configuration
 export KAFKA_BROKER="localhost:9092"
 export KAFKA_IN_TOPIC="com.sectorflabs.ratatoskr.in"
 export KAFKA_OUT_TOPIC="com.sectorflabs.ratatoskr.out"
+
+# MQTT Configuration
+export MQTT_BROKER="localhost:1883"
+export MQTT_IN_TOPIC="com.sectorflabs.ratatoskr.in"
+export MQTT_OUT_TOPIC="com.sectorflabs.ratatoskr.out"
 
 # Image Storage
 export IMAGE_STORAGE_DIR="./images"

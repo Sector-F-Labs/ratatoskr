@@ -1,7 +1,4 @@
 use dotenv::dotenv;
-use rdkafka::config::ClientConfig;
-use rdkafka::consumer::{Consumer, StreamConsumer};
-use rdkafka::producer::FutureProducer;
 use std::env;
 use std::sync::Arc;
 use teloxide::dispatching::UpdateFilterExt;
@@ -19,6 +16,8 @@ use telegram_handler::{
 
 mod utils;
 
+mod broker;
+use broker::{kafka::KafkaBroker, mqtt::MqttBroker, MessageBroker};
 mod kafka_processing;
 use kafka_processing::*;
 
@@ -36,24 +35,22 @@ async fn main() {
     let telegram_token =
         env::var("TELEGRAM_BOT_TOKEN").expect("FATAL: TELEGRAM_BOT_TOKEN not set in environment");
 
+    let broker_type = env::var("BROKER_TYPE").unwrap_or_else(|_| "kafka".to_string());
+    tracing::info!(%broker_type, "Selected message broker type");
+
     let kafka_broker = env::var("KAFKA_BROKER").unwrap_or_else(|_| {
         tracing::info!("KAFKA_BROKER not set, defaulting to localhost:9092");
         "localhost:9092".to_string()
     });
-    tracing::info!(kafka_broker = %kafka_broker, "Using Kafka broker");
 
     let kafka_in_topic_val = env::var("KAFKA_IN_TOPIC").unwrap_or_else(|_| {
         tracing::info!("KAFKA_IN_TOPIC not set, defaulting to com.sectorflabs.ratatoskr.in");
         "com.sectorflabs.ratatoskr.in".to_string()
     });
-    let kafka_in_topic = KafkaInTopic(kafka_in_topic_val.clone());
-    tracing::info!(kafka_in_topic = %kafka_in_topic.0, "Using Kafka IN topic");
-
     let kafka_out_topic = env::var("KAFKA_OUT_TOPIC").unwrap_or_else(|_| {
         tracing::info!("KAFKA_OUT_TOPIC not set, defaulting to com.sectorflabs.ratatoskr.out");
         "com.sectorflabs.ratatoskr.out".to_string()
     });
-    tracing::info!(kafka_out_topic = %kafka_out_topic, "Using Kafka OUT topic");
 
     let image_storage_dir = env::var("IMAGE_STORAGE_DIR").unwrap_or_else(|_| {
         tracing::info!("IMAGE_STORAGE_DIR not set, defaulting to ./images");
@@ -64,45 +61,27 @@ async fn main() {
 
     let bot = Bot::new(telegram_token.clone());
 
-    let producer: Arc<FutureProducer> = Arc::new(
-        ClientConfig::new()
-            .set("bootstrap.servers", &kafka_broker)
-            .create()
-            .unwrap_or_else(|e| {
-                tracing::error!(error = %e, "Kafka producer creation error");
-                panic!("Kafka producer creation error: {}", e);
-            }),
-    );
-    tracing::info!("Kafka producer created successfully.");
+    let (broker, in_topic_val, out_topic_val): (Arc<dyn MessageBroker>, String, String) =
+        if broker_type.to_lowercase() == "mqtt" {
+            let mqtt_broker_addr = env::var("MQTT_BROKER").unwrap_or_else(|_| "localhost:1883".to_string());
+            let mqtt_in_topic = env::var("MQTT_IN_TOPIC").unwrap_or_else(|_| "com.sectorflabs.ratatoskr.in".to_string());
+            let mqtt_out_topic = env::var("MQTT_OUT_TOPIC").unwrap_or_else(|_| "com.sectorflabs.ratatoskr.out".to_string());
+            let broker = Arc::new(MqttBroker::new(&mqtt_broker_addr).await.expect("Failed to create MQTT broker")) as Arc<dyn MessageBroker>;
+            (broker, mqtt_in_topic, mqtt_out_topic)
+        } else {
+            let broker = Arc::new(KafkaBroker::new(&kafka_broker).expect("Failed to create Kafka broker")) as Arc<dyn MessageBroker>;
+            (broker, kafka_in_topic_val.clone(), kafka_out_topic.clone())
+        };
 
-    let consumer: StreamConsumer = ClientConfig::new()
-        .set("group.id", "ratatoskr-bot-consumer")
-        .set("bootstrap.servers", &kafka_broker)
-        .set("enable.partition.eof", "false")
-        .set("session.timeout.ms", "6000")
-        .set("enable.auto.commit", "true")
-        .create()
-        .unwrap_or_else(|e| {
-            tracing::error!(error = %e, "Kafka consumer creation error");
-            panic!("Kafka consumer creation error: {}", e);
-        });
-    tracing::info!("Kafka consumer created successfully.");
-
-    consumer.subscribe(&[&kafka_out_topic]).unwrap_or_else(|e| {
-        tracing::error!(topic = %kafka_out_topic, error = %e, "Failed to subscribe to Kafka topic");
-        panic!(
-            "Failed to subscribe to Kafka topic {}: {}",
-            kafka_out_topic, e
-        );
-    });
-    tracing::info!(topic = %kafka_out_topic, "Subscribed to Kafka topic successfully.");
+    let in_topic = KafkaInTopic(in_topic_val.clone());
 
     let bot_consumer_clone = bot.clone();
-    let kafka_out_topic_clone = kafka_out_topic.clone();
-    tokio::spawn(start_kafka_consumer_loop(
+    let out_topic_clone = out_topic_val.clone();
+    let broker_clone = broker.clone();
+    tokio::spawn(start_broker_consumer_loop(
         bot_consumer_clone,
-        consumer,
-        kafka_out_topic_clone,
+        broker_clone,
+        out_topic_clone,
     ));
 
     let handler = dptree::entry()
@@ -112,7 +91,7 @@ async fn main() {
         .branch(Update::filter_message_reaction_updated().endpoint(message_reaction_handler));
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![producer, kafka_in_topic, image_storage_dir])
+        .dependencies(dptree::deps![broker, in_topic, image_storage_dir])
         .enable_ctrlc_handler()
         .build()
         .dispatch()

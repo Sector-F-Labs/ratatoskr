@@ -8,10 +8,12 @@ license = "BSD-3-Clause"
 teloxide = { version = "0.15", features = ["macros"] }
 tokio = { version = "1.45", features = ["full"] }
 rdkafka = { version = "0.37", features = ["tokio"] }
+rumqttc = "0.24"
+async-trait = "0.1"
 dotenv = "0.15"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio-stream = "0.1"
+tokio-stream = { version = "0.1", features = ["sync"] }
 futures-util = "0.3"
 reqwest = { version = "0.11", features = ["stream"] }
 chrono = { version = "0.4", features = ["serde"] }
