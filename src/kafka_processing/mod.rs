@@ -39,54 +39,6 @@ where
     }
 }
 
-pub async fn start_broker_consumer_loop(
-    bot_consumer_clone: Bot,
-    broker: Arc<dyn MessageBroker>,
-    out_topic_clone: String,
-) {
-    tracing::info!(topic = %out_topic_clone, "Starting broker consumer stream for Telegram output...");
-    let mut stream = match broker.subscribe(&out_topic_clone).await {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::error!(topic = %out_topic_clone, error = %e, "Failed to subscribe to broker topic");
-            return;
-        }
-    };
-    while let Some(payload) = stream.next().await {
-        match serde_json::from_slice::<OutgoingMessage>(&payload) {
-            Ok(mut out_msg) => {
-                // Ensure trace_id is set (for backward compatibility)
-                if out_msg.trace_id.is_nil() {
-                    out_msg.trace_id = uuid::Uuid::new_v4();
-                    tracing::debug!(
-                        "Generated new trace ID for message without one: {}",
-                        out_msg.trace_id
-                    );
-                }
-
-                let span = tracing::info_span!(
-                    "handle_outgoing_message",
-                    trace_id = %out_msg.trace_id,
-                    chat_id = %out_msg.target.chat_id,
-                    message_type = ?std::mem::discriminant(&out_msg.message_type)
-                );
-
-                if let Err(e) = handle_outgoing_message(&bot_consumer_clone, out_msg)
-                    .instrument(span)
-                    .await
-                {
-                    tracing::error!(error = ?e, "Error handling OutgoingMessage");
-                }
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "Error deserializing message from broker payload");
-                tracing::debug!(raw_payload = ?String::from_utf8_lossy(&payload), "Problematic broker payload");
-            }
-        }
-    }
-    tracing::warn!(topic = %out_topic_clone, "Broker consumer stream ended.");
-}
-
 async fn handle_outgoing_message(
     bot: &Bot,
     message: OutgoingMessage,
@@ -510,4 +462,52 @@ async fn handle_outgoing_message(
     }
 
     Ok(())
+}
+
+pub async fn start_broker_consumer_loop(
+    bot_consumer_clone: Bot,
+    broker: Arc<dyn MessageBroker>,
+    out_topic_clone: String,
+) {
+    tracing::info!(topic = %out_topic_clone, "Starting broker consumer stream for Telegram output...");
+    let mut stream = match broker.subscribe(&out_topic_clone).await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(topic = %out_topic_clone, error = %e, "Failed to subscribe to broker topic");
+            return;
+        }
+    };
+    while let Some(payload) = stream.next().await {
+        match serde_json::from_slice::<OutgoingMessage>(&payload) {
+            Ok(out_msg) => {
+                if out_msg.trace_id.is_nil() {
+                    tracing::warn!(
+                        "Generated new trace ID for message without one: {}",
+                        out_msg.trace_id
+                    );
+                    // early return
+                    return;
+                }
+
+                let span = tracing::info_span!(
+                    "handle_outgoing_message",
+                    trace_id = %out_msg.trace_id,
+                    chat_id = %out_msg.target.chat_id,
+                    message_type = ?std::mem::discriminant(&out_msg.message_type)
+                );
+
+                if let Err(e) = handle_outgoing_message(&bot_consumer_clone, out_msg)
+                    .instrument(span)
+                    .await
+                {
+                    tracing::error!(error = ?e, "Error handling OutgoingMessage");
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Error deserializing message from broker payload");
+                tracing::debug!(raw_payload = ?String::from_utf8_lossy(&payload), "Problematic broker payload");
+            }
+        }
+    }
+    tracing::warn!(topic = %out_topic_clone, "Broker consumer stream ended.");
 }

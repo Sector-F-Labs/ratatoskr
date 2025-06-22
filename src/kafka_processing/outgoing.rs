@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-// Unified outgoing message type for the OUT topic
+/// Unified outgoing message type for the OUT topic
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OutgoingMessage {
     #[serde(default = "generate_trace_id")]
