@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, QoS};
+use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -11,7 +11,6 @@ use std::sync::Arc;
 pub struct MqttBroker {
     client: AsyncClient,
     sender: broadcast::Sender<Vec<u8>>,
-    eventloop: Arc<tokio::sync::Mutex<EventLoop>>, // protect eventloop polling
 }
 
 impl MqttBroker {
@@ -44,11 +43,7 @@ impl MqttBroker {
                 }
             }
         });
-        Ok(Self {
-            client,
-            sender: tx,
-            eventloop,
-        })
+        Ok(Self { client, sender: tx })
     }
 }
 

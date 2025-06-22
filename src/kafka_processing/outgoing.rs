@@ -191,6 +191,8 @@ pub struct ReplyKeyboardMarkup {
 
 // Constants for button layout
 const INLINE_BUTTON_TEXT_LENGTH: usize = 26;
+
+#[allow(dead_code)]
 const REPLY_KEYBOARD_BUTTON_TEXT_LENGTH: usize = 20; // Typically shorter for reply keyboards
 
 impl ButtonInfo {
@@ -218,117 +220,6 @@ impl ButtonInfo {
         }
 
         keyboard
-    }
-}
-
-impl ReplyKeyboardButton {
-    /// Create reply keyboard buttons organized into rows based on text length
-    pub fn create_reply_keyboard(
-        buttons: Vec<ReplyKeyboardButton>,
-    ) -> Vec<Vec<ReplyKeyboardButton>> {
-        let mut keyboard = Vec::new();
-        let mut current_row = Vec::new();
-        let mut current_line_length = 0;
-
-        for button in buttons {
-            if current_line_length + button.text.len() > REPLY_KEYBOARD_BUTTON_TEXT_LENGTH {
-                if !current_row.is_empty() {
-                    keyboard.push(current_row);
-                    current_row = Vec::new();
-                    current_line_length = 0;
-                }
-            }
-            current_line_length += button.text.len();
-            current_row.push(button);
-        }
-
-        // Don't forget the last row
-        if !current_row.is_empty() {
-            keyboard.push(current_row);
-        }
-
-        keyboard
-    }
-}
-
-impl OutgoingMessage {
-    /// Create a new OutgoingMessage with a generated trace ID
-    pub fn new(message_type: OutgoingMessageType, target: MessageTarget) -> Self {
-        Self {
-            trace_id: Uuid::new_v4(),
-            message_type,
-            timestamp: Utc::now(),
-            target,
-        }
-    }
-
-    /// Create a new OutgoingMessage with an existing trace ID (for message correlation)
-    pub fn with_trace_id(
-        trace_id: Uuid,
-        message_type: OutgoingMessageType,
-        target: MessageTarget,
-    ) -> Self {
-        Self {
-            trace_id,
-            message_type,
-            timestamp: Utc::now(),
-            target,
-        }
-    }
-
-    /// Helper to create a text message with auto-organized inline buttons
-    pub fn text_with_auto_buttons(
-        text: String,
-        buttons: Vec<ButtonInfo>,
-        target: MessageTarget,
-    ) -> Self {
-        let organized_buttons = if buttons.is_empty() {
-            None
-        } else {
-            Some(ButtonInfo::create_inline_keyboard(buttons))
-        };
-
-        Self::new(
-            OutgoingMessageType::TextMessage(TextMessageData {
-                text,
-                buttons: organized_buttons,
-                reply_keyboard: None,
-                parse_mode: None,
-                disable_web_page_preview: None,
-            }),
-            target,
-        )
-    }
-
-    /// Helper to create a text message with auto-organized reply keyboard
-    pub fn text_with_reply_keyboard(
-        text: String,
-        keyboard_buttons: Vec<ReplyKeyboardButton>,
-        target: MessageTarget,
-    ) -> Self {
-        let organized_keyboard = if keyboard_buttons.is_empty() {
-            None
-        } else {
-            Some(ReplyKeyboardMarkup {
-                keyboard: ReplyKeyboardButton::create_reply_keyboard(keyboard_buttons),
-                is_persistent: None,
-                resize_keyboard: Some(true),
-                one_time_keyboard: None,
-                input_field_placeholder: None,
-                selective: None,
-            })
-        };
-
-        Self::new(
-            OutgoingMessageType::TextMessage(TextMessageData {
-                text,
-                buttons: None,
-                reply_keyboard: organized_keyboard,
-                parse_mode: None,
-                disable_web_page_preview: None,
-            }),
-            target,
-        )
     }
 }
 
@@ -423,6 +314,33 @@ mod tests {
             organized[0][0].text,
             "This is an extremely long button text that exceeds the limit"
         );
+    }
+
+    pub fn create_reply_keyboard(
+        buttons: Vec<ReplyKeyboardButton>,
+    ) -> Vec<Vec<ReplyKeyboardButton>> {
+        let mut keyboard = Vec::new();
+        let mut current_row = Vec::new();
+        let mut current_line_length = 0;
+
+        for button in buttons {
+            if current_line_length + button.text.len() > REPLY_KEYBOARD_BUTTON_TEXT_LENGTH {
+                if !current_row.is_empty() {
+                    keyboard.push(current_row);
+                    current_row = Vec::new();
+                    current_line_length = 0;
+                }
+            }
+            current_line_length += button.text.len();
+            current_row.push(button);
+        }
+
+        // Don't forget the last row
+        if !current_row.is_empty() {
+            keyboard.push(current_row);
+        }
+
+        keyboard
     }
 
     #[test]
@@ -542,7 +460,7 @@ mod tests {
             },
         ];
 
-        let organized = ReplyKeyboardButton::create_reply_keyboard(buttons);
+        let organized = create_reply_keyboard(buttons);
 
         // Should organize based on 20 char limit for reply keyboards
         // Row 1: "Short" = 5 chars
@@ -564,7 +482,7 @@ mod tests {
         assert_eq!(organized_inline.len(), 0);
 
         let empty_reply: Vec<ReplyKeyboardButton> = vec![];
-        let organized_reply = ReplyKeyboardButton::create_reply_keyboard(empty_reply);
+        let organized_reply = create_reply_keyboard(empty_reply);
         assert_eq!(organized_reply.len(), 0);
     }
 }
