@@ -1,25 +1,23 @@
 # Ratatoskr
 
-A lightweight Telegram <-> Kafka bridge written in **Rust**, designed to decouple message ingestion from processing logic.
+A lightweight Telegram <-> process bridge written in **Rust**, designed to stream Telegram updates over stdout and accept responses via a named pipe.
 
 ![Logo](docs/logo-256.png)
 
-[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue.svg)](https://github.com/yourusername/ratatoskr)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue.svg)](https://github.com/sector-f-labs/ratatoskr)
 
 ## 🚀 Features
 
 * Uses [`teloxide`](https://github.com/teloxide/teloxide) for Telegram bot integration
-* Supports Kafka via [`rdkafka`](https://github.com/fede1024/rust-rdkafka) and MQTT via [`rumqttc`](https://github.com/bytebeamio/rumqtt)
-* Forwards full Telegram message objects to the selected broker
-* **Automatic image downloading** - Downloads images from Telegram messages and stores them locally ([documentation](docs/image_downloading.md))
-* Listens for outbound messages on a Kafka topic and sends them back to Telegram
-* Minimal, event-driven, and easy to extend
+* Streams inbound Telegram updates as newline-delimited JSON to **stdout**
+* Reads outbound `OutgoingMessage` JSON lines from a named pipe (`PIPE_OUTBOUND_PATH`) and delivers them to Telegram
+* Minimal, event-driven, and broker-free—great for chaining with shell pipelines
 
 ## 📦 Prerequisites
 
 * [Rust](https://www.rust-lang.org/tools/install)
-* A Kafka broker (default: `localhost:9092`)
 * A Telegram bot token from [@BotFather](https://t.me/BotFather)
+* A handler that reads JSONL from stdin and writes JSONL responses to a named pipe
 
 ## ⚙️ Setup
 
@@ -35,11 +33,7 @@ A lightweight Telegram <-> Kafka bridge written in **Rust**, designed to decoupl
 2. **Set environment variables:**
 
    * `TELEGRAM_BOT_TOKEN` (**required**)
-   * `BROKER_TYPE` (optional, `kafka` or `mqtt`, default: `kafka`)
-   * `KAFKA_BROKER` / `MQTT_BROKER` (broker address)
-   * `KAFKA_IN_TOPIC` / `MQTT_IN_TOPIC` (incoming topic)
-   * `KAFKA_OUT_TOPIC` / `MQTT_OUT_TOPIC` (outgoing topic)
-   * `IMAGE_STORAGE_DIR` (optional, default: `./images`)
+   * `PIPE_OUTBOUND_PATH` (optional, default: `./ratatoskr_out.pipe`)
 
    You can place these in a `.env` file or export them in your shell. A `.env.example` file is provided as a template.
 
@@ -84,69 +78,38 @@ To run tests:
 cargo test
 ```
 
-## 🐳 Containerization
+### Pipe mode (broker-free)
 
-### Using Docker
-
-To containerize the application for deployment:
-
-1. **Using the provided Dockerfile:**
-
-   The project includes a Dockerfile that sets up a multi-stage build for a lightweight container:
-
-   ```dockerfile
-   FROM rust:1.75-slim as builder
-   WORKDIR /app
-   COPY . .
-   RUN cargo build --release
-
-   FROM debian:bullseye-slim
-   RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
-   WORKDIR /app
-   COPY --from=builder /app/target/release/ratatoskr /app/ratatoskr
-   COPY --from=builder /app/.env* /app/
-   ENV RUST_LOG=info
-   CMD ["./ratatoskr"]
-   ```
-
-2. **Build and run the Docker image:**
-
-   ```sh
-   docker build -t ratatoskr:latest .
-   docker run -d --name ratatoskr \
-     -e TELEGRAM_BOT_TOKEN=your_token_here \
-     -e KAFKA_BROKER=kafka:9092 \
-     ratatoskr:latest
-   ```
-
-### Using Docker Compose
-
-For a complete development environment with Kafka, Zookeeper, and Kafdrop (a Kafka UI):
-
-1. **Run with docker-compose:**
-
-   ```sh
-   # Make sure TELEGRAM_BOT_TOKEN is set in your environment or .env file
-   docker-compose up -d
-   ```
-
-2. **Access services:**
-   - Ratatoskr: Running in container
-   - Kafka: localhost:9092
-   - Kafdrop (Kafka UI): http://localhost:9000
-
-Alternatively, to try the MQTT backend, run:
+Run Ratatoskr and stream Telegram updates into your handler:
 
 ```sh
-docker compose -f mqtt-stack.yml up -d
+mkfifo /tmp/ratatoskr_out.pipe
+PIPE_OUTBOUND_PATH=/tmp/ratatoskr_out.pipe TELEGRAM_BOT_TOKEN=... cargo run --release \
+  | ./your-handler-script \
+  > /tmp/ratatoskr_out.pipe
 ```
 
+Behavior:
+- Incoming Telegram updates are printed as JSONL (one JSON object per line) to stdout.
+- Your handler reads that stream, emits JSONL `OutgoingMessage` objects to the named pipe, and Ratatoskr sends them to Telegram.
 
----
+#### Quick black-box check (service running)
+
+With Ratatoskr running in pipe mode and `CHAT_ID` set to your chat:
+
+```sh
+export PIPE_OUTBOUND_PATH=/tmp/ratatoskr_out.pipe
+export CHAT_ID=123456789
+make test_pipe   # writes a sample TextMessage to the pipe
+```
+
+You should receive "Hello from pipe test" in the target chat.
+
+----
 
 ## 📤 Unified Message Types
 
-Ratatoskr uses a unified message type system for consistent handling of all Kafka communications. For detailed documentation, see [Unified Message Types](docs/unified_message_types.md).
+Ratatoskr uses a unified message type system for consistent handling of all communications. For detailed documentation, see [Unified Message Types](docs/unified_message_types.md).
 
 ### 🔧 Client Type Generation
 
@@ -174,7 +137,7 @@ cd docs/types
 ./generate-types.sh  # Generates types for all supported languages
 ```
 
-### Incoming Messages to `KAFKA_IN_TOPIC` (e.g., `com.sectorflabs.ratatoskr.in`)
+### Incoming message stream (stdout)
 
 All messages from Telegram are wrapped in the unified `IncomingMessage` type:
 
@@ -261,7 +224,7 @@ All messages from Telegram are wrapped in the unified `IncomingMessage` type:
 }
 ```
 
-### Outgoing Messages from `KAFKA_OUT_TOPIC` (e.g., `com.sectorflabs.ratatoskr.out`)
+### Outgoing messages read from `PIPE_OUTBOUND_PATH`
 
 All messages to Telegram use the unified `OutgoingMessage` type:
 
@@ -362,7 +325,7 @@ For troubleshooting common issues, see [Troubleshooting Guide](docs/troubleshoot
 
 ## 🧠 Why Ratatoskr?
 
-Inspired by the mythical squirrel that relays messages across realms, Ratatoskr is built to relay messages between users and intelligent systems, using Kafka as the messaging backbone.
+Inspired by the mythical squirrel that relays messages across realms, Ratatoskr is built to relay messages between users and intelligent systems, using simple pipe-based messaging as the backbone.
 
 ## 🤝 Contributing
 

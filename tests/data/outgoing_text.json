@@ -1,0 +1,1 @@
+{"trace_id":"00000000-0000-0000-0000-000000000001","message_type":{"type":"TextMessage","data":{"text":"hello from pipe","buttons":null,"reply_keyboard":null,"parse_mode":null,"disable_web_page_preview":null}},"timestamp":"2024-01-01T00:00:00Z","target":{"platform":"telegram","chat_id":123456789,"thread_id":null}}
