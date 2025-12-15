@@ -464,16 +464,12 @@ async fn handle_outgoing_message(
     Ok(())
 }
 
-pub async fn start_broker_consumer_loop(
-    bot_consumer_clone: Bot,
-    broker: Arc<dyn MessageBroker>,
-    out_topic_clone: String,
-) {
-    tracing::info!(topic = %out_topic_clone, "Starting broker consumer stream for Telegram output...");
-    let mut stream = match broker.subscribe(&out_topic_clone).await {
+pub async fn start_broker_consumer_loop(bot_consumer_clone: Bot, broker: Arc<dyn MessageBroker>) {
+    tracing::info!("Starting broker consumer stream for Telegram output...");
+    let mut stream = match broker.subscribe().await {
         Ok(s) => s,
         Err(e) => {
-            tracing::error!(topic = %out_topic_clone, error = %e, "Failed to subscribe to broker topic");
+            tracing::error!(error = %e, "Failed to subscribe to broker stream");
             return;
         }
     };
@@ -509,5 +505,5 @@ pub async fn start_broker_consumer_loop(
             }
         }
     }
-    tracing::warn!(topic = %out_topic_clone, "Broker consumer stream ended.");
+    tracing::warn!("Broker consumer stream ended.");
 }

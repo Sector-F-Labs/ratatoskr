@@ -1,4 +1,4 @@
-use crate::outgoing::{ButtonInfo, ReplyKeyboardMarkup};
+use crate::kafka_processing::outgoing::{ButtonInfo, ReplyKeyboardMarkup};
 use crate::telegram_handler::incoming::{FileInfo, FileMetadata, FileType};
 use regex::Regex;
 use std::error::Error;

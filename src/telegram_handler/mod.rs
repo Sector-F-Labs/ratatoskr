@@ -1,5 +1,4 @@
 use crate::broker::MessageBroker;
-use crate::structs::{ImageStorageDir, KafkaInTopic};
 use crate::utils::{
     file_info_from_animation, file_info_from_audio, file_info_from_document, file_info_from_photo,
     file_info_from_sticker, file_info_from_video, file_info_from_video_note, file_info_from_voice,
@@ -19,7 +18,6 @@ pub async fn message_handler(
     bot: Bot,
     msg: Message,
     producer: Arc<dyn MessageBroker>,
-    kafka_in_topic: KafkaInTopic,
 ) -> Result<()> {
     let trace_id = Uuid::new_v4();
     let span = tracing::info_span!("message_handler", trace_id = %trace_id, message_id = %msg.id.0, chat_id = %msg.chat.id.0);
@@ -262,20 +260,11 @@ pub async fn message_handler(
             e
         })?;
 
-    tracing::info!(
-        topic = %kafka_in_topic.0,
-        key = "message",
-        has_files = %(!file_infos.is_empty()),
-        file_count = %file_infos.len(),
-        "Sending Telegram message to broker"
-    );
-    producer
-        .publish(kafka_in_topic.0.as_str(), json.as_bytes())
-        .await
-        .map_err(|e| {
-            tracing::error!(topic = %kafka_in_topic.0, key = "message", error = %e, "Failed to send message to broker");
-            e
-        })?;
+    tracing::info!(key = "message", has_files = %(!file_infos.is_empty()), file_count = %file_infos.len(), "Sending Telegram message to broker");
+    producer.publish(json.as_bytes()).await.map_err(|e| {
+        tracing::error!(key = "message", error = %e, "Failed to send message to broker");
+        e
+    })?;
     Ok(())
     }.instrument(span).await
 }
@@ -284,8 +273,6 @@ pub async fn message_reaction_handler(
     _bot: Bot,
     reaction: MessageReactionUpdated,
     producer: Arc<dyn MessageBroker>,
-    kafka_in_topic: KafkaInTopic,
-    _image_storage_dir: ImageStorageDir,
 ) -> Result<()> {
     let chat_id = reaction.chat.id.0;
     let message_id = reaction.message_id.0;
@@ -349,20 +336,12 @@ pub async fn message_reaction_handler(
             e
         })?;
 
-    tracing::info!(
-        topic = %kafka_in_topic.0,
-        key = "message_reaction",
-        user_id = ?user_id,
-        "Sending message reaction to broker"
-    );
+    tracing::info!(key = "message_reaction", user_id = ?user_id, "Sending message reaction to broker");
 
-    producer
-        .publish(kafka_in_topic.0.as_str(), json.as_bytes())
-        .await
-        .map_err(|e| {
-            tracing::error!(topic = %kafka_in_topic.0, key = "message_reaction", error = %e, "Failed to send message reaction to broker");
-            e
-        })?;
+    producer.publish(json.as_bytes()).await.map_err(|e| {
+        tracing::error!(key = "message_reaction", error = %e, "Failed to send message reaction to broker");
+        e
+    })?;
 
     Ok(())
     }.instrument(span).await
@@ -372,8 +351,6 @@ pub async fn callback_query_handler(
     bot: Bot,
     query: CallbackQuery,
     producer: Arc<dyn MessageBroker>,
-    kafka_in_topic: KafkaInTopic,
-    _image_storage_dir: ImageStorageDir,
 ) -> Result<()> {
     let user_id = query.from.id.0;
     let query_id = query.id.clone();
@@ -409,14 +386,11 @@ pub async fn callback_query_handler(
             e
         })?;
 
-    tracing::info!(topic = %kafka_in_topic.0, key = "callback_query", "Sending callback data to broker");
-    producer
-        .publish(kafka_in_topic.0.as_str(), json.as_bytes())
-        .await
-        .map_err(|e| {
-            tracing::error!(topic = %kafka_in_topic.0, key = "callback_query", error = %e, "Failed to send callback data to broker");
-            e
-        })?;
+    tracing::info!(key = "callback_query", "Sending callback data to broker");
+    producer.publish(json.as_bytes()).await.map_err(|e| {
+        tracing::error!(key = "callback_query", error = %e, "Failed to send callback data to broker");
+        e
+    })?;
 
     Ok(())
     }.instrument(span).await
@@ -426,7 +400,6 @@ pub async fn edited_message_handler(
     bot: Bot,
     msg: Message,
     producer: Arc<dyn MessageBroker>,
-    kafka_in_topic: KafkaInTopic,
 ) -> Result<()> {
     let trace_id = Uuid::new_v4();
     let span = tracing::info_span!("edited_message_handler", trace_id = %trace_id, message_id = %msg.id.0, chat_id = %msg.chat.id.0);
@@ -670,21 +643,11 @@ pub async fn edited_message_handler(
             e
         })?;
 
-    tracing::info!(
-        topic = %kafka_in_topic.0,
-        key = "edited_message",
-        has_files = %(!file_infos.is_empty()),
-        file_count = %file_infos.len(),
-        edit_date = ?msg.edit_date(),
-        "Sending edited Telegram message to broker"
-    );
-    producer
-        .publish(kafka_in_topic.0.as_str(), json.as_bytes())
-        .await
-        .map_err(|e| {
-            tracing::error!(topic = %kafka_in_topic.0, key = "edited_message", error = %e, "Failed to send edited message to broker");
-            e
-        })?;
+    tracing::info!(key = "edited_message", has_files = %(!file_infos.is_empty()), file_count = %file_infos.len(), edit_date = ?msg.edit_date(), "Sending edited Telegram message to broker");
+    producer.publish(json.as_bytes()).await.map_err(|e| {
+        tracing::error!(key = "edited_message", error = %e, "Failed to send edited message to broker");
+        e
+    })?;
     Ok(())
     }.instrument(span).await
 }
