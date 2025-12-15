@@ -2,7 +2,15 @@
 name = "ratatoskr"
 version = "0.1.0"
 edition = "2024"
+authors = ["Divan Visagie <me@divanv.com>"]
+description = "A lightweight Telegram bot bridge that streams updates over stdout and accepts responses via named pipes"
+repository = "https://github.com/sector-f-labs/ratatoskr"
+homepage = "https://github.com/sector-f-labs/ratatoskr"
+documentation = "https://github.com/sector-f-labs/ratatoskr#readme"
+readme = "README.md"
 license = "BSD-3-Clause"
+keywords = ["telegram", "bot", "bridge", "pipe", "messaging"]
+categories = ["command-line-utilities", "network-programming"]
 
 [dependencies]
 teloxide = { version = "0.15", features = ["macros"] }
