@@ -11,3 +11,4 @@ pub trait MessageBroker: Send + Sync {
 }
 
 pub mod pipe;
+pub mod user_pipes;

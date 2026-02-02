@@ -1,6 +1,7 @@
 use clap::Parser;
 use dotenv::dotenv;
 use std::env;
+use std::io::Read as _;
 use std::sync::Arc;
 use teloxide::dispatching::UpdateFilterExt;
 use teloxide::types::Update;
@@ -19,7 +20,7 @@ use telegram_handler::{
 mod utils;
 
 mod broker;
-use broker::{MessageBroker, pipe::PipeBroker};
+use broker::{MessageBroker, pipe::PipeBroker, user_pipes::UserPipeRouter};
 mod kafka_processing;
 use kafka_processing::*;
 
@@ -36,6 +37,12 @@ async fn main() {
     match cli.command {
         Command::Serve => run_serve(&cli).await,
         Command::Users { ref action } => run_users(&cli, action),
+        Command::Send {
+            chat_id,
+            ref parse_mode,
+            thread_id,
+            ref pipe_dir,
+        } => run_send(chat_id, parse_mode.as_deref(), thread_id, pipe_dir.as_deref()),
     }
 }
 
@@ -64,6 +71,68 @@ fn run_users(cli: &Cli, action: &UsersAction) {
             }
         }
     }
+}
+
+fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>, pipe_dir: Option<&str>) {
+    use kafka_processing::outgoing::{
+        MessageTarget, OutgoingMessage, OutgoingMessageType, TextMessageData,
+    };
+
+    let mut text = String::new();
+    std::io::stdin()
+        .read_to_string(&mut text)
+        .expect("Failed to read from stdin");
+
+    let text = text.trim_end().to_string();
+    if text.is_empty() {
+        eprintln!("Error: empty input");
+        std::process::exit(1);
+    }
+
+    let pipe_dir = match pipe_dir {
+        Some(d) => d.to_string(),
+        None => {
+            let uid = nix::unistd::getuid();
+            format!("/run/user/{}/ratatoskr/", uid)
+        }
+    };
+
+    let out_pipe = std::path::Path::new(&pipe_dir).join("out.pipe");
+
+    let msg = OutgoingMessage {
+        trace_id: uuid::Uuid::new_v4(),
+        message_type: OutgoingMessageType::TextMessage(TextMessageData {
+            text,
+            buttons: None,
+            reply_keyboard: None,
+            parse_mode: parse_mode.map(String::from),
+            disable_web_page_preview: None,
+        }),
+        timestamp: chrono::Utc::now(),
+        target: MessageTarget {
+            platform: "telegram".to_string(),
+            chat_id,
+            thread_id,
+        },
+    };
+
+    let json = serde_json::to_string(&msg).expect("Failed to serialize message");
+    let mut line = json;
+    line.push('\n');
+
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&out_pipe)
+        .unwrap_or_else(|e| {
+            eprintln!("Error: failed to open {}: {e}", out_pipe.display());
+            std::process::exit(1);
+        });
+
+    use std::io::Write;
+    file.write_all(line.as_bytes()).unwrap_or_else(|e| {
+        eprintln!("Error: failed to write to {}: {e}", out_pipe.display());
+        std::process::exit(1);
+    });
 }
 
 async fn run_serve(cli: &Cli) {
@@ -102,9 +171,21 @@ async fn run_serve(cli: &Cli) {
     tracing::info!(path = %inbound_pipe, "Using pipe broker (stdout -> handler, pipe -> Telegram)");
     let broker = Arc::new(PipeBroker::new(inbound_pipe)) as Arc<dyn MessageBroker>;
 
-    let bot_consumer_clone = bot.clone();
-    let broker_clone = broker.clone();
-    tokio::spawn(start_broker_consumer_loop(bot_consumer_clone, broker_clone));
+    // Set up per-user pipe routing if users are configured, otherwise fall back to global broker
+    let user_router: Option<Arc<UserPipeRouter>> = if has_users {
+        let (router, response_rx) = UserPipeRouter::new(auth_service.clone());
+        let router = Arc::new(router);
+        router.start_readers().await;
+        let bot_pipe_clone = bot.clone();
+        tokio::spawn(start_user_pipe_consumer_loop(bot_pipe_clone, response_rx));
+        tracing::info!("Per-user pipe routing enabled");
+        Some(router)
+    } else {
+        let bot_consumer_clone = bot.clone();
+        let broker_clone = broker.clone();
+        tokio::spawn(start_broker_consumer_loop(bot_consumer_clone, broker_clone));
+        None
+    };
 
     let handler = dptree::entry()
         .branch(Update::filter_message().endpoint(message_handler))
@@ -113,7 +194,7 @@ async fn run_serve(cli: &Cli) {
         .branch(Update::filter_message_reaction_updated().endpoint(message_reaction_handler));
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![broker, auth_service])
+        .dependencies(dptree::deps![broker, auth_service, user_router])
         .enable_ctrlc_handler()
         .build()
         .dispatch()

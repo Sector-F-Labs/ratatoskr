@@ -1,5 +1,6 @@
 use crate::auth::AuthService;
 use crate::broker::MessageBroker;
+use crate::broker::user_pipes::UserPipeRouter;
 use crate::utils::{
     file_info_from_animation, file_info_from_audio, file_info_from_document, file_info_from_photo,
     file_info_from_sticker, file_info_from_video, file_info_from_video_note, file_info_from_voice,
@@ -21,12 +22,14 @@ pub async fn message_handler(
     msg: Message,
     producer: Arc<dyn MessageBroker>,
     auth: Arc<RwLock<AuthService>>,
+    router: Option<Arc<UserPipeRouter>>,
 ) -> Result<()> {
     let trace_id = Uuid::new_v4();
     let span = tracing::info_span!("message_handler", trace_id = %trace_id, message_id = %msg.id.0, chat_id = %msg.chat.id.0);
 
     async move {
         // Auth gate
+        let mut user_index: Option<usize> = None;
         if let Some(from) = msg.from.as_ref() {
             let tg_id = from.id.0;
             let tg_username = from.username.as_deref();
@@ -39,6 +42,7 @@ pub async fn message_handler(
                     }
                 }
                 Some(idx) => {
+                    user_index = Some(idx);
                     let needs_promote = auth_read.get_user(idx).is_some_and(|u| u.telegram_user_id.is_none());
                     drop(auth_read);
                     if needs_promote {
@@ -286,10 +290,17 @@ pub async fn message_handler(
         })?;
 
     tracing::info!(key = "message", has_files = %(!file_infos.is_empty()), file_count = %file_infos.len(), "Sending Telegram message to broker");
-    producer.publish(json.as_bytes()).await.map_err(|e| {
-        tracing::error!(key = "message", error = %e, "Failed to send message to broker");
-        e
-    })?;
+
+    if let (Some(router), Some(idx)) = (&router, user_index) {
+        if let Err(e) = router.route(idx, json.as_bytes()).await {
+            tracing::warn!(key = "message", user_index = idx, error = %e, "Failed to route message to user pipe");
+        }
+    } else {
+        producer.publish(json.as_bytes()).await.map_err(|e| {
+            tracing::error!(key = "message", error = %e, "Failed to send message to broker");
+            e
+        })?;
+    }
     Ok(())
     }.instrument(span).await
 }
@@ -299,6 +310,7 @@ pub async fn message_reaction_handler(
     reaction: MessageReactionUpdated,
     producer: Arc<dyn MessageBroker>,
     auth: Arc<RwLock<AuthService>>,
+    router: Option<Arc<UserPipeRouter>>,
 ) -> Result<()> {
     let chat_id = reaction.chat.id.0;
     let message_id = reaction.message_id.0;
@@ -309,12 +321,20 @@ pub async fn message_reaction_handler(
 
     async move {
     // Auth gate
+    let mut user_index: Option<usize> = None;
     if let Some(tg_id) = user_id {
         let tg_username = reaction.actor.user().and_then(|u| u.username.as_deref().map(String::from));
         let auth_read = auth.read().await;
-        if auth_read.check(tg_id, tg_username.as_deref()).is_none() && !auth_read.is_empty() {
-            tracing::warn!(telegram_user_id = tg_id, "Unauthorized reaction — dropping");
-            return Ok(());
+        match auth_read.check(tg_id, tg_username.as_deref()) {
+            None => {
+                if !auth_read.is_empty() {
+                    tracing::warn!(telegram_user_id = tg_id, "Unauthorized reaction — dropping");
+                    return Ok(());
+                }
+            }
+            Some(idx) => {
+                user_index = Some(idx);
+            }
         }
     }
 
@@ -373,10 +393,16 @@ pub async fn message_reaction_handler(
 
     tracing::info!(key = "message_reaction", user_id = ?user_id, "Sending message reaction to broker");
 
-    producer.publish(json.as_bytes()).await.map_err(|e| {
-        tracing::error!(key = "message_reaction", error = %e, "Failed to send message reaction to broker");
-        e
-    })?;
+    if let (Some(router), Some(idx)) = (&router, user_index) {
+        if let Err(e) = router.route(idx, json.as_bytes()).await {
+            tracing::warn!(key = "message_reaction", user_index = idx, error = %e, "Failed to route reaction to user pipe");
+        }
+    } else {
+        producer.publish(json.as_bytes()).await.map_err(|e| {
+            tracing::error!(key = "message_reaction", error = %e, "Failed to send message reaction to broker");
+            e
+        })?;
+    }
 
     Ok(())
     }.instrument(span).await
@@ -387,6 +413,7 @@ pub async fn callback_query_handler(
     query: CallbackQuery,
     producer: Arc<dyn MessageBroker>,
     auth: Arc<RwLock<AuthService>>,
+    router: Option<Arc<UserPipeRouter>>,
 ) -> Result<()> {
     let user_id = query.from.id.0;
     let query_id = query.id.clone();
@@ -398,12 +425,21 @@ pub async fn callback_query_handler(
 
     async move {
     // Auth gate
+    let user_index: Option<usize>;
     {
         let tg_username = query.from.username.as_deref();
         let auth_read = auth.read().await;
-        if auth_read.check(user_id, tg_username).is_none() && !auth_read.is_empty() {
-            tracing::warn!(telegram_user_id = user_id, "Unauthorized callback query — dropping");
-            return Ok(());
+        match auth_read.check(user_id, tg_username) {
+            None => {
+                if !auth_read.is_empty() {
+                    tracing::warn!(telegram_user_id = user_id, "Unauthorized callback query — dropping");
+                    return Ok(());
+                }
+                user_index = None;
+            }
+            Some(idx) => {
+                user_index = Some(idx);
+            }
         }
     }
 
@@ -432,10 +468,17 @@ pub async fn callback_query_handler(
         })?;
 
     tracing::info!(key = "callback_query", "Sending callback data to broker");
-    producer.publish(json.as_bytes()).await.map_err(|e| {
-        tracing::error!(key = "callback_query", error = %e, "Failed to send callback data to broker");
-        e
-    })?;
+
+    if let (Some(router), Some(idx)) = (&router, user_index) {
+        if let Err(e) = router.route(idx, json.as_bytes()).await {
+            tracing::warn!(key = "callback_query", user_index = idx, error = %e, "Failed to route callback to user pipe");
+        }
+    } else {
+        producer.publish(json.as_bytes()).await.map_err(|e| {
+            tracing::error!(key = "callback_query", error = %e, "Failed to send callback data to broker");
+            e
+        })?;
+    }
 
     Ok(())
     }.instrument(span).await
@@ -446,19 +489,28 @@ pub async fn edited_message_handler(
     msg: Message,
     producer: Arc<dyn MessageBroker>,
     auth: Arc<RwLock<AuthService>>,
+    router: Option<Arc<UserPipeRouter>>,
 ) -> Result<()> {
     let trace_id = Uuid::new_v4();
     let span = tracing::info_span!("edited_message_handler", trace_id = %trace_id, message_id = %msg.id.0, chat_id = %msg.chat.id.0);
 
     async move {
         // Auth gate
+        let mut user_index: Option<usize> = None;
         if let Some(from) = msg.from.as_ref() {
             let tg_id = from.id.0;
             let tg_username = from.username.as_deref();
             let auth_read = auth.read().await;
-            if auth_read.check(tg_id, tg_username).is_none() && !auth_read.is_empty() {
-                tracing::warn!(telegram_user_id = tg_id, "Unauthorized edited message — dropping");
-                return Ok(());
+            match auth_read.check(tg_id, tg_username) {
+                None => {
+                    if !auth_read.is_empty() {
+                        tracing::warn!(telegram_user_id = tg_id, "Unauthorized edited message — dropping");
+                        return Ok(());
+                    }
+                }
+                Some(idx) => {
+                    user_index = Some(idx);
+                }
             }
         }
 
@@ -700,10 +752,17 @@ pub async fn edited_message_handler(
         })?;
 
     tracing::info!(key = "edited_message", has_files = %(!file_infos.is_empty()), file_count = %file_infos.len(), edit_date = ?msg.edit_date(), "Sending edited Telegram message to broker");
-    producer.publish(json.as_bytes()).await.map_err(|e| {
-        tracing::error!(key = "edited_message", error = %e, "Failed to send edited message to broker");
-        e
-    })?;
+
+    if let (Some(router), Some(idx)) = (&router, user_index) {
+        if let Err(e) = router.route(idx, json.as_bytes()).await {
+            tracing::warn!(key = "edited_message", user_index = idx, error = %e, "Failed to route edited message to user pipe");
+        }
+    } else {
+        producer.publish(json.as_bytes()).await.map_err(|e| {
+            tracing::error!(key = "edited_message", error = %e, "Failed to send edited message to broker");
+            e
+        })?;
+    }
     Ok(())
     }.instrument(span).await
 }
