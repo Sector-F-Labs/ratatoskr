@@ -19,6 +19,7 @@ fn generate_trace_id() -> Uuid {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", content = "data")]
+#[allow(clippy::enum_variant_names)]
 pub enum OutgoingMessageType {
     TextMessage(TextMessageData),
     ImageMessage(ImageMessageData),
@@ -203,12 +204,12 @@ impl ButtonInfo {
         let mut current_line_length = 0;
 
         for button in buttons {
-            if current_line_length + button.text.len() > INLINE_BUTTON_TEXT_LENGTH {
-                if !current_row.is_empty() {
-                    keyboard.push(current_row);
-                    current_row = Vec::new();
-                    current_line_length = 0;
-                }
+            if current_line_length + button.text.len() > INLINE_BUTTON_TEXT_LENGTH
+                && !current_row.is_empty()
+            {
+                keyboard.push(current_row);
+                current_row = Vec::new();
+                current_line_length = 0;
             }
             current_line_length += button.text.len();
             current_row.push(button);

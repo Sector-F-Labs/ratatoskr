@@ -355,32 +355,32 @@ pub fn create_reply_keyboard(keyboard_opt: &Option<ReplyKeyboardMarkup>) -> Opti
 
         let mut reply_keyboard = KeyboardMarkup::new(keyboard_buttons);
 
-        if let Some(resize) = keyboard.resize_keyboard {
-            if resize {
-                reply_keyboard = reply_keyboard.resize_keyboard();
-            }
+        if let Some(resize) = keyboard.resize_keyboard
+            && resize
+        {
+            reply_keyboard = reply_keyboard.resize_keyboard();
         }
 
-        if let Some(one_time) = keyboard.one_time_keyboard {
-            if one_time {
-                reply_keyboard = reply_keyboard.one_time_keyboard();
-            }
+        if let Some(one_time) = keyboard.one_time_keyboard
+            && one_time
+        {
+            reply_keyboard = reply_keyboard.one_time_keyboard();
         }
 
-        if let Some(persistent) = keyboard.is_persistent {
-            if persistent {
-                reply_keyboard = reply_keyboard.persistent();
-            }
+        if let Some(persistent) = keyboard.is_persistent
+            && persistent
+        {
+            reply_keyboard = reply_keyboard.persistent();
         }
 
         if let Some(placeholder) = &keyboard.input_field_placeholder {
             reply_keyboard = reply_keyboard.input_field_placeholder(placeholder.clone());
         }
 
-        if let Some(selective) = keyboard.selective {
-            if selective {
-                reply_keyboard = reply_keyboard.selective();
-            }
+        if let Some(selective) = keyboard.selective
+            && selective
+        {
+            reply_keyboard = reply_keyboard.selective();
         }
 
         reply_keyboard
@@ -458,7 +458,7 @@ pub fn file_info_from_audio(audio: &Audio) -> (FileMeta, FileType, FileMetadata)
         audio.file.clone(),
         FileType::Audio,
         FileMetadata::Audio {
-            duration: serde_json::to_value(&audio.duration)
+            duration: serde_json::to_value(audio.duration)
                 .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
@@ -474,7 +474,7 @@ pub fn file_info_from_voice(voice: &Voice) -> (FileMeta, FileType, FileMetadata)
         voice.file.clone(),
         FileType::Voice,
         FileMetadata::Voice {
-            duration: serde_json::to_value(&voice.duration)
+            duration: serde_json::to_value(voice.duration)
                 .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
@@ -490,7 +490,7 @@ pub fn file_info_from_video(video: &Video) -> (FileMeta, FileType, FileMetadata)
         FileMetadata::Video {
             width: video.width,
             height: video.height,
-            duration: serde_json::to_value(&video.duration)
+            duration: serde_json::to_value(video.duration)
                 .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
@@ -505,7 +505,7 @@ pub fn file_info_from_video_note(video_note: &VideoNote) -> (FileMeta, FileType,
         FileType::VideoNote,
         FileMetadata::VideoNote {
             length: video_note.length,
-            duration: serde_json::to_value(&video_note.duration)
+            duration: serde_json::to_value(video_note.duration)
                 .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)
@@ -544,7 +544,7 @@ pub fn file_info_from_animation(animation: &Animation) -> (FileMeta, FileType, F
         FileMetadata::Animation {
             width: animation.width,
             height: animation.height,
-            duration: serde_json::to_value(&animation.duration)
+            duration: serde_json::to_value(animation.duration)
                 .ok()
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u32)

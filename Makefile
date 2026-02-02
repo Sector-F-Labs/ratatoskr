@@ -1,4 +1,4 @@
-.PHONY: help build install run dev test pipe
+.PHONY: help build install run dev test pipe coverage
 
 PIPE_OUTBOUND_PATH ?= ./ratatoskr_out.pipe
 
@@ -11,6 +11,7 @@ help:
 	@echo "  dev       - cargo watch -x run"
 	@echo "  test      - cargo test"
 	@echo "  pipe      - mkfifo $${PIPE_OUTBOUND_PATH} if missing"
+	@echo "  coverage  - run tests with llvm-cov and show coverage report"
 	@echo "  test_pipe - write a sample OutgoingMessage JSON into the pipe (requires CHAT_ID)"
 
 build:
@@ -27,6 +28,11 @@ dev:
 
 test:
 	cargo test
+
+coverage:
+	cargo llvm-cov --summary-only
+	@echo ""
+	@echo "For a detailed HTML report: cargo llvm-cov --html --open"
 
 pipe:
 	@if [ ! -p "$(PIPE_OUTBOUND_PATH)" ]; then \

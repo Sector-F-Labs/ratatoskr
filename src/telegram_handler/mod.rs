@@ -1,3 +1,4 @@
+use crate::auth::AuthService;
 use crate::broker::MessageBroker;
 use crate::utils::{
     file_info_from_animation, file_info_from_audio, file_info_from_document, file_info_from_photo,
@@ -9,6 +10,7 @@ use incoming::{FileInfo, IncomingMessage};
 use std::sync::Arc;
 use teloxide::prelude::{Bot, CallbackQuery, Message, Requester};
 use teloxide::types::MessageReactionUpdated;
+use tokio::sync::RwLock;
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -18,17 +20,41 @@ pub async fn message_handler(
     bot: Bot,
     msg: Message,
     producer: Arc<dyn MessageBroker>,
+    auth: Arc<RwLock<AuthService>>,
 ) -> Result<()> {
     let trace_id = Uuid::new_v4();
     let span = tracing::info_span!("message_handler", trace_id = %trace_id, message_id = %msg.id.0, chat_id = %msg.chat.id.0);
 
     async move {
+        // Auth gate
+        if let Some(from) = msg.from.as_ref() {
+            let tg_id = from.id.0;
+            let tg_username = from.username.as_deref();
+            let auth_read = auth.read().await;
+            match auth_read.check(tg_id, tg_username) {
+                None => {
+                    if !auth_read.is_empty() {
+                        tracing::warn!(telegram_user_id = tg_id, username = ?tg_username, "Unauthorized message — dropping");
+                        return Ok(());
+                    }
+                }
+                Some(idx) => {
+                    let needs_promote = auth_read.get_user(idx).is_some_and(|u| u.telegram_user_id.is_none());
+                    drop(auth_read);
+                    if needs_promote {
+                        let mut auth_write = auth.write().await;
+                        let _ = auth_write.promote(idx, tg_id);
+                    }
+                }
+            }
+        }
+
         // Handle file info gathering for all supported file types
         let mut file_infos: Vec<FileInfo> = Vec::new();
 
     // Handle photos
-    if let Some(photos) = msg.photo() {
-        if let Some(best_photo) = select_best_photo(photos) {
+    if let Some(photos) = msg.photo()
+        && let Some(best_photo) = select_best_photo(photos) {
             let (file, file_type, metadata) = file_info_from_photo(best_photo);
             tracing::info!(
                 message_id = %msg.id.0,
@@ -53,7 +79,6 @@ pub async fn message_handler(
                 }
             }
         }
-    }
 
     // Handle audio
     if let Some(audio) = &msg.audio() {
@@ -273,6 +298,7 @@ pub async fn message_reaction_handler(
     _bot: Bot,
     reaction: MessageReactionUpdated,
     producer: Arc<dyn MessageBroker>,
+    auth: Arc<RwLock<AuthService>>,
 ) -> Result<()> {
     let chat_id = reaction.chat.id.0;
     let message_id = reaction.message_id.0;
@@ -282,6 +308,15 @@ pub async fn message_reaction_handler(
     let span = tracing::info_span!("message_reaction_handler", trace_id = %trace_id, chat_id = %chat_id, message_id = %message_id);
 
     async move {
+    // Auth gate
+    if let Some(tg_id) = user_id {
+        let tg_username = reaction.actor.user().and_then(|u| u.username.as_deref().map(String::from));
+        let auth_read = auth.read().await;
+        if auth_read.check(tg_id, tg_username.as_deref()).is_none() && !auth_read.is_empty() {
+            tracing::warn!(telegram_user_id = tg_id, "Unauthorized reaction — dropping");
+            return Ok(());
+        }
+    }
 
     // Convert reaction types to strings
     let old_reaction: Vec<String> = reaction
@@ -351,6 +386,7 @@ pub async fn callback_query_handler(
     bot: Bot,
     query: CallbackQuery,
     producer: Arc<dyn MessageBroker>,
+    auth: Arc<RwLock<AuthService>>,
 ) -> Result<()> {
     let user_id = query.from.id.0;
     let query_id = query.id.clone();
@@ -361,6 +397,15 @@ pub async fn callback_query_handler(
     let span = tracing::info_span!("callback_query_handler", trace_id = %trace_id, user_id = %user_id, chat_id = %chat_id, callback_query_id = %query_id);
 
     async move {
+    // Auth gate
+    {
+        let tg_username = query.from.username.as_deref();
+        let auth_read = auth.read().await;
+        if auth_read.check(user_id, tg_username).is_none() && !auth_read.is_empty() {
+            tracing::warn!(telegram_user_id = user_id, "Unauthorized callback query — dropping");
+            return Ok(());
+        }
+    }
 
     tracing::debug!(callback_query_id = %query_id, %user_id, message_id = ?message_id, callback_data = %data, "Received callback query");
 
@@ -400,17 +445,29 @@ pub async fn edited_message_handler(
     bot: Bot,
     msg: Message,
     producer: Arc<dyn MessageBroker>,
+    auth: Arc<RwLock<AuthService>>,
 ) -> Result<()> {
     let trace_id = Uuid::new_v4();
     let span = tracing::info_span!("edited_message_handler", trace_id = %trace_id, message_id = %msg.id.0, chat_id = %msg.chat.id.0);
 
     async move {
+        // Auth gate
+        if let Some(from) = msg.from.as_ref() {
+            let tg_id = from.id.0;
+            let tg_username = from.username.as_deref();
+            let auth_read = auth.read().await;
+            if auth_read.check(tg_id, tg_username).is_none() && !auth_read.is_empty() {
+                tracing::warn!(telegram_user_id = tg_id, "Unauthorized edited message — dropping");
+                return Ok(());
+            }
+        }
+
         // Handle file info gathering for all supported file types (same as message_handler)
         let mut file_infos: Vec<FileInfo> = Vec::new();
 
     // Handle photos
-    if let Some(photos) = msg.photo() {
-        if let Some(best_photo) = select_best_photo(photos) {
+    if let Some(photos) = msg.photo()
+        && let Some(best_photo) = select_best_photo(photos) {
             let (file, file_type, metadata) = file_info_from_photo(best_photo);
             tracing::info!(
                 message_id = %msg.id.0,
@@ -435,7 +492,6 @@ pub async fn edited_message_handler(
                 }
             }
         }
-    }
 
     // Handle audio
     if let Some(audio) = &msg.audio() {
