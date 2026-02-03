@@ -41,7 +41,8 @@ async fn main() {
             chat_id,
             ref parse_mode,
             thread_id,
-        } => run_send(chat_id, parse_mode.as_deref(), thread_id),
+            ref message,
+        } => run_send(chat_id, parse_mode.as_deref(), thread_id, message),
     }
 }
 
@@ -72,24 +73,46 @@ fn run_users(cli: &Cli, action: &UsersAction) {
     }
 }
 
-fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>) {
+fn build_send_text(stdin_text: &str, message: &[String]) -> Result<String, String> {
+    let stdin_text = stdin_text.trim_end().to_string();
+    let message_text = if message.is_empty() {
+        String::new()
+    } else {
+        message.join(" ")
+    };
+
+    match (stdin_text.is_empty(), message_text.is_empty()) {
+        (true, true) => Err("empty input".to_string()),
+        (true, false) => Ok(message_text),
+        (false, true) => Ok(stdin_text),
+        (false, false) => Ok(format!("{stdin_text}\n{message_text}")),
+    }
+}
+
+fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>, message: &[String]) {
     use kafka_processing::outgoing::{
         MessageTarget, OutgoingMessage, OutgoingMessageType, TextMessageData,
     };
     use rdkafka::config::ClientConfig;
     use rdkafka::producer::{BaseProducer, BaseRecord, Producer};
+    use std::io::IsTerminal;
     use std::time::Duration;
 
     let mut text = String::new();
-    std::io::stdin()
-        .read_to_string(&mut text)
-        .expect("Failed to read from stdin");
-
-    let text = text.trim_end().to_string();
-    if text.is_empty() {
-        eprintln!("Error: empty input");
-        std::process::exit(1);
+    let mut stdin = std::io::stdin();
+    if message.is_empty() || !stdin.is_terminal() {
+        stdin
+            .read_to_string(&mut text)
+            .expect("Failed to read from stdin");
     }
+
+    let text = match build_send_text(&text, message) {
+        Ok(text) => text,
+        Err(_) => {
+            eprintln!("Error: empty input");
+            std::process::exit(1);
+        }
+    };
 
     let brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
 
@@ -141,6 +164,35 @@ fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>) {
         eprintln!("Error: failed to flush Kafka producer: {e}");
         std::process::exit(1);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_send_text;
+
+    #[test]
+    fn build_send_text_errors_on_empty_input() {
+        let text = build_send_text("", &[]);
+        assert!(text.is_err());
+    }
+
+    #[test]
+    fn build_send_text_uses_stdin_when_only_stdin() {
+        let text = build_send_text("hello\n", &[]).unwrap();
+        assert_eq!(text, "hello");
+    }
+
+    #[test]
+    fn build_send_text_uses_positional_when_only_positional() {
+        let text = build_send_text("", &["hello".to_string(), "world".to_string()]).unwrap();
+        assert_eq!(text, "hello world");
+    }
+
+    #[test]
+    fn build_send_text_appends_positional_after_stdin() {
+        let text = build_send_text("hello", &["world".to_string()]).unwrap();
+        assert_eq!(text, "hello\nworld");
+    }
 }
 
 async fn run_serve(cli: &Cli) {
