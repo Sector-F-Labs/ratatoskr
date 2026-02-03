@@ -1,4 +1,4 @@
-use crate::config::{default_pipe_dir, UserEntry, UsersConfig};
+use crate::config::{UserEntry, UsersConfig};
 use anyhow::Result;
 use std::path::Path;
 
@@ -19,7 +19,6 @@ pub fn add_user(
         enabled: true,
         telegram_user_id: None,
         promote_on_first_auth: promote,
-        pipe_dir: default_pipe_dir(system_user),
         allowed_usernames: usernames.to_vec(),
         first_seen_at: None,
         last_seen_at: None,

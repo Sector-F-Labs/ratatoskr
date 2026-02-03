@@ -20,7 +20,7 @@ use telegram_handler::{
 mod utils;
 
 mod broker;
-use broker::{MessageBroker, pipe::PipeBroker, user_pipes::UserPipeRouter};
+use broker::{MessageBroker, kafka::KafkaBroker};
 mod kafka_processing;
 use kafka_processing::*;
 
@@ -41,8 +41,7 @@ async fn main() {
             chat_id,
             ref parse_mode,
             thread_id,
-            ref pipe_dir,
-        } => run_send(chat_id, parse_mode.as_deref(), thread_id, pipe_dir.as_deref()),
+        } => run_send(chat_id, parse_mode.as_deref(), thread_id),
     }
 }
 
@@ -73,10 +72,13 @@ fn run_users(cli: &Cli, action: &UsersAction) {
     }
 }
 
-fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>, pipe_dir: Option<&str>) {
+fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>) {
     use kafka_processing::outgoing::{
         MessageTarget, OutgoingMessage, OutgoingMessageType, TextMessageData,
     };
+    use rdkafka::config::ClientConfig;
+    use rdkafka::producer::{BaseProducer, BaseRecord, Producer};
+    use std::time::Duration;
 
     let mut text = String::new();
     std::io::stdin()
@@ -89,15 +91,10 @@ fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>, pipe
         std::process::exit(1);
     }
 
-    let pipe_dir = match pipe_dir {
-        Some(d) => d.to_string(),
-        None => {
-            let uid = nix::unistd::getuid();
-            format!("/run/user/{}/ratatoskr/", uid)
-        }
-    };
+    let brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
 
-    let out_pipe = std::path::Path::new(&pipe_dir).join("out.pipe");
+    let topic_prefix = env::var("KAFKA_TOPIC_PREFIX").unwrap_or_else(|_| "ratatoskr".to_string());
+    let topic = format!("{}.out", topic_prefix);
 
     let msg = OutgoingMessage {
         trace_id: uuid::Uuid::new_v4(),
@@ -117,20 +114,31 @@ fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>, pipe
     };
 
     let json = serde_json::to_string(&msg).expect("Failed to serialize message");
-    let mut line = json;
-    line.push('\n');
 
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .open(&out_pipe)
+    let producer: BaseProducer = ClientConfig::new()
+        .set("bootstrap.servers", &brokers)
+        .set("message.timeout.ms", "5000")
+        .create()
         .unwrap_or_else(|e| {
-            eprintln!("Error: failed to open {}: {e}", out_pipe.display());
+            eprintln!("Error: failed to create Kafka producer: {e}");
             std::process::exit(1);
         });
 
-    use std::io::Write;
-    file.write_all(line.as_bytes()).unwrap_or_else(|e| {
-        eprintln!("Error: failed to write to {}: {e}", out_pipe.display());
+    let key = chat_id.to_string();
+    producer
+        .send(
+            BaseRecord::to(&topic)
+                .key(&key)
+                .payload(json.as_bytes()),
+        )
+        .unwrap_or_else(|(e, _)| {
+            eprintln!("Error: failed to send to Kafka: {e}");
+            std::process::exit(1);
+        });
+
+    // Flush to ensure message is sent
+    producer.flush(Duration::from_secs(5)).unwrap_or_else(|e| {
+        eprintln!("Error: failed to flush Kafka producer: {e}");
         std::process::exit(1);
     });
 }
@@ -163,29 +171,36 @@ async fn run_serve(cli: &Cli) {
 
     let telegram_token =
         env::var("TELEGRAM_BOT_TOKEN").expect("FATAL: TELEGRAM_BOT_TOKEN not set in environment");
+    let kafka_brokers =
+        env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+    let kafka_topic_prefix = env::var("KAFKA_TOPIC_PREFIX").ok();
 
     let bot = Bot::new(telegram_token.clone());
 
-    let inbound_pipe =
-        env::var("PIPE_OUTBOUND_PATH").unwrap_or_else(|_| "./ratatoskr_out.pipe".to_string());
-    tracing::info!(path = %inbound_pipe, "Using pipe broker (stdout -> handler, pipe -> Telegram)");
-    let broker = Arc::new(PipeBroker::new(inbound_pipe)) as Arc<dyn MessageBroker>;
+    tracing::info!(
+        brokers = %kafka_brokers,
+        topic_prefix = ?kafka_topic_prefix,
+        "Using Kafka broker"
+    );
+    let kafka_broker = KafkaBroker::new(
+        &kafka_brokers,
+        kafka_topic_prefix.as_deref(),
+        None,
+    )
+    .expect("Failed to create Kafka broker");
 
-    // Set up per-user pipe routing if users are configured, otherwise fall back to global broker
-    let user_router: Option<Arc<UserPipeRouter>> = if has_users {
-        let (router, response_rx) = UserPipeRouter::new(auth_service.clone());
-        let router = Arc::new(router);
-        router.start_readers().await;
-        let bot_pipe_clone = bot.clone();
-        tokio::spawn(start_user_pipe_consumer_loop(bot_pipe_clone, response_rx));
-        tracing::info!("Per-user pipe routing enabled");
-        Some(router)
-    } else {
-        let bot_consumer_clone = bot.clone();
-        let broker_clone = broker.clone();
-        tokio::spawn(start_broker_consumer_loop(bot_consumer_clone, broker_clone));
-        None
-    };
+    // Ensure topics exist
+    kafka_broker
+        .ensure_topics()
+        .await
+        .expect("Failed to create Kafka topics");
+
+    let broker = Arc::new(kafka_broker) as Arc<dyn MessageBroker>;
+
+    // Start consumer loop for outgoing messages
+    let bot_consumer_clone = bot.clone();
+    let broker_clone = broker.clone();
+    tokio::spawn(start_broker_consumer_loop(bot_consumer_clone, broker_clone));
 
     let handler = dptree::entry()
         .branch(Update::filter_message().endpoint(message_handler))
@@ -194,7 +209,7 @@ async fn run_serve(cli: &Cli) {
         .branch(Update::filter_message_reaction_updated().endpoint(message_reaction_handler));
 
     Dispatcher::builder(bot, handler)
-        .dependencies(dptree::deps![broker, auth_service, user_router])
+        .dependencies(dptree::deps![broker, auth_service])
         .enable_ctrlc_handler()
         .build()
         .dispatch()

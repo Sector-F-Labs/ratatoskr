@@ -57,11 +57,6 @@ impl AuthService {
         self.config.users.get(index)
     }
 
-    /// Number of configured users.
-    pub fn user_count(&self) -> usize {
-        self.config.users.len()
-    }
-
     /// Promote a user: capture their telegram_user_id, clear allowed_usernames, persist.
     pub fn promote(&mut self, index: usize, telegram_user_id: u64) -> Result<()> {
         if let Some(entry) = self.config.users.get_mut(index) {
@@ -96,7 +91,6 @@ mod tests {
             enabled: true,
             telegram_user_id: tg_id,
             promote_on_first_auth: promote,
-            pipe_dir: "/tmp/test/".to_string(),
             allowed_usernames: usernames.into_iter().map(String::from).collect(),
             first_seen_at: None,
             last_seen_at: None,

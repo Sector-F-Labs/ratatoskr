@@ -6,9 +6,10 @@ pub type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + 'a>>;
 
 #[async_trait]
 pub trait MessageBroker: Send + Sync {
-    async fn publish(&self, payload: &[u8]) -> anyhow::Result<()>;
+    /// Publish a message with an optional key for partitioning.
+    /// The key is typically the telegram_user_id for incoming messages.
+    async fn publish(&self, key: Option<&str>, payload: &[u8]) -> anyhow::Result<()>;
     async fn subscribe<'a>(&'a self) -> anyhow::Result<BoxStream<'a, Vec<u8>>>;
 }
 
-pub mod pipe;
-pub mod user_pipes;
+pub mod kafka;

@@ -4,7 +4,6 @@ use crate::utils::{create_markup, create_reply_keyboard, format_telegram_markdow
 use futures_util::StreamExt;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use teloxide::{
     payloads::{
         EditMessageReplyMarkupSetters, EditMessageTextSetters, SendAnimationSetters,
@@ -507,43 +506,4 @@ pub async fn start_broker_consumer_loop(bot_consumer_clone: Bot, broker: Arc<dyn
         }
     }
     tracing::warn!("Broker consumer stream ended.");
-}
-
-pub async fn start_user_pipe_consumer_loop(
-    bot: Bot,
-    mut response_rx: mpsc::UnboundedReceiver<Vec<u8>>,
-) {
-    tracing::info!("Starting user pipe consumer loop for Telegram output...");
-    while let Some(payload) = response_rx.recv().await {
-        match serde_json::from_slice::<OutgoingMessage>(&payload) {
-            Ok(out_msg) => {
-                if out_msg.trace_id.is_nil() {
-                    tracing::warn!(
-                        "Generated new trace ID for message without one: {}",
-                        out_msg.trace_id
-                    );
-                    return;
-                }
-
-                let span = tracing::info_span!(
-                    "handle_outgoing_message",
-                    trace_id = %out_msg.trace_id,
-                    chat_id = %out_msg.target.chat_id,
-                    message_type = ?std::mem::discriminant(&out_msg.message_type)
-                );
-
-                if let Err(e) = handle_outgoing_message(&bot, out_msg)
-                    .instrument(span)
-                    .await
-                {
-                    tracing::error!(error = ?e, "Error handling OutgoingMessage from user pipe");
-                }
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "Error deserializing message from user pipe payload");
-                tracing::debug!(raw_payload = ?String::from_utf8_lossy(&payload), "Problematic user pipe payload");
-            }
-        }
-    }
-    tracing::warn!("User pipe consumer loop ended.");
 }

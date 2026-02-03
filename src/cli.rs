@@ -21,7 +21,7 @@ pub enum Command {
         #[command(subcommand)]
         action: UsersAction,
     },
-    /// Send a message to Telegram (reads text from stdin)
+    /// Send a message to Telegram via Kafka (reads text from stdin)
     Send {
         /// Target chat ID
         #[arg(long)]
@@ -32,9 +32,6 @@ pub enum Command {
         /// Thread ID for forum groups
         #[arg(long)]
         thread_id: Option<i32>,
-        /// Pipe directory (default: /run/user/<uid>/ratatoskr/)
-        #[arg(long)]
-        pipe_dir: Option<String>,
     },
 }
 

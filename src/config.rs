@@ -16,7 +16,6 @@ pub struct UserEntry {
     pub telegram_user_id: Option<u64>,
     #[serde(default)]
     pub promote_on_first_auth: bool,
-    pub pipe_dir: String,
     #[serde(default)]
     pub allowed_usernames: Vec<String>,
     pub first_seen_at: Option<String>,
@@ -50,14 +49,6 @@ impl UsersConfig {
     }
 }
 
-/// Derive default pipe directory from system username via uid lookup.
-pub fn default_pipe_dir(system_user: &str) -> String {
-    match nix::unistd::User::from_name(system_user) {
-        Ok(Some(user)) => format!("/run/user/{}/ratatoskr/", user.uid),
-        _ => format!("/tmp/ratatoskr-{}/", system_user),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,7 +62,6 @@ mod tests {
                 enabled: true,
                 telegram_user_id: Some(12345),
                 promote_on_first_auth: false,
-                pipe_dir: "/run/user/1000/ratatoskr/".to_string(),
                 allowed_usernames: vec!["alice_tg".to_string()],
                 first_seen_at: None,
                 last_seen_at: None,
@@ -99,7 +89,6 @@ mod tests {
         let toml_str = r#"
 [[users]]
 system_user = "bob"
-pipe_dir = "/tmp/bob/"
 "#;
         let config: UsersConfig = toml::from_str(toml_str).unwrap();
         assert!(config.users[0].enabled);
