@@ -43,6 +43,7 @@ async fn main() {
             thread_id,
             ref message,
         } => run_send(chat_id, parse_mode.as_deref(), thread_id, message),
+        Command::Read { wait } => run_read(wait),
     }
 }
 
@@ -166,9 +167,173 @@ fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>, mess
     });
 }
 
+fn select_latest_message_index(candidates: &[(Option<i64>, i32, i64)]) -> Option<usize> {
+    candidates
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| match (a.0, b.0) {
+            (Some(a_ts), Some(b_ts)) => a_ts
+                .cmp(&b_ts)
+                .then_with(|| a.1.cmp(&b.1))
+                .then_with(|| a.2.cmp(&b.2)),
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (None, None) => a.1.cmp(&b.1).then_with(|| a.2.cmp(&b.2)),
+        })
+        .map(|(idx, _)| idx)
+}
+
+fn run_read(wait: bool) {
+    use rdkafka::consumer::{BaseConsumer, Consumer};
+    use rdkafka::message::{OwnedMessage, Timestamp};
+    use rdkafka::{ClientConfig, Message, Offset, TopicPartitionList};
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+
+    let brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+    let topic_prefix = env::var("KAFKA_TOPIC_PREFIX").unwrap_or_else(|_| "ratatoskr".to_string());
+    let topic = format!("{}.in", topic_prefix);
+
+    let group_id = format!("ratatoskr-read-{}", uuid::Uuid::new_v4());
+    let consumer: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &brokers)
+        .set("group.id", &group_id)
+        .set("enable.auto.commit", "false")
+        .set("auto.offset.reset", "latest")
+        .create()
+        .unwrap_or_else(|e| {
+            eprintln!("Error: failed to create Kafka consumer: {e}");
+            std::process::exit(1);
+        });
+
+    let metadata = consumer
+        .fetch_metadata(Some(&topic), Duration::from_secs(5))
+        .unwrap_or_else(|e| {
+            eprintln!("Error: failed to fetch Kafka metadata: {e}");
+            std::process::exit(1);
+        });
+    let topic_meta = metadata
+        .topics()
+        .iter()
+        .find(|t| t.name() == topic)
+        .unwrap_or_else(|| {
+            eprintln!("Error: topic not found: {topic}");
+            std::process::exit(1);
+        });
+
+    let partitions: Vec<i32> = topic_meta.partitions().iter().map(|p| p.id()).collect();
+    if partitions.is_empty() {
+        eprintln!("Error: no partitions found for topic: {topic}");
+        std::process::exit(1);
+    }
+
+    let mut tpl = TopicPartitionList::new();
+    if wait {
+        for partition in &partitions {
+            tpl.add_partition_offset(&topic, *partition, Offset::End)
+                .unwrap_or_else(|e| {
+                    eprintln!("Error: failed to set partition offset: {e}");
+                    std::process::exit(1);
+                });
+        }
+        consumer.assign(&tpl).unwrap_or_else(|e| {
+            eprintln!("Error: failed to assign partitions: {e}");
+            std::process::exit(1);
+        });
+
+        loop {
+            match consumer.poll(Duration::from_secs(1)) {
+                Some(Ok(msg)) => {
+                    if let Some(payload) = msg.payload() {
+                        println!("{}", String::from_utf8_lossy(payload));
+                        return;
+                    }
+                }
+                Some(Err(e)) => {
+                    eprintln!("Error: failed to read from Kafka: {e}");
+                }
+                None => {}
+            }
+        }
+    }
+
+    let mut target_partitions = Vec::new();
+    for partition in &partitions {
+        let (_low, high) = consumer
+            .fetch_watermarks(&topic, *partition, Duration::from_secs(5))
+            .unwrap_or_else(|e| {
+                eprintln!("Error: failed to fetch watermarks: {e}");
+                std::process::exit(1);
+            });
+        if high == 0 {
+            continue;
+        }
+        let offset = high - 1;
+        tpl.add_partition_offset(&topic, *partition, Offset::Offset(offset))
+            .unwrap_or_else(|e| {
+                eprintln!("Error: failed to set partition offset: {e}");
+                std::process::exit(1);
+            });
+        target_partitions.push(*partition);
+    }
+
+    if target_partitions.is_empty() {
+        eprintln!("Error: no messages found on topic: {topic}");
+        std::process::exit(1);
+    }
+
+    consumer.assign(&tpl).unwrap_or_else(|e| {
+        eprintln!("Error: failed to assign partitions: {e}");
+        std::process::exit(1);
+    });
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut collected: HashMap<i32, OwnedMessage> = HashMap::new();
+    while collected.len() < target_partitions.len() && Instant::now() < deadline {
+        match consumer.poll(Duration::from_millis(200)) {
+            Some(Ok(msg)) => {
+                let partition = msg.partition();
+                if target_partitions.contains(&partition) && !collected.contains_key(&partition) {
+                    collected.insert(partition, msg.detach());
+                }
+            }
+            Some(Err(e)) => {
+                eprintln!("Error: failed to read from Kafka: {e}");
+                break;
+            }
+            None => {}
+        }
+    }
+
+    if collected.is_empty() {
+        eprintln!("Error: no messages found on topic: {topic}");
+        std::process::exit(1);
+    }
+
+    let mut messages: Vec<OwnedMessage> = collected.into_values().collect();
+    let candidates: Vec<(Option<i64>, i32, i64)> = messages
+        .iter()
+        .map(|msg| {
+            let ts = match msg.timestamp() {
+                Timestamp::NotAvailable => None,
+                Timestamp::CreateTime(ms) | Timestamp::LogAppendTime(ms) => Some(ms),
+            };
+            (ts, msg.partition(), msg.offset())
+        })
+        .collect();
+
+    let idx = select_latest_message_index(&candidates).unwrap_or(0);
+    let message = messages.swap_remove(idx);
+    let payload = message.payload().unwrap_or_else(|| {
+        eprintln!("Error: message payload was empty");
+        std::process::exit(1);
+    });
+    println!("{}", String::from_utf8_lossy(payload));
+}
+
 #[cfg(test)]
 mod tests {
-    use super::build_send_text;
+    use super::{build_send_text, select_latest_message_index};
 
     #[test]
     fn build_send_text_errors_on_empty_input() {
@@ -192,6 +357,20 @@ mod tests {
     fn build_send_text_appends_positional_after_stdin() {
         let text = build_send_text("hello", &["world".to_string()]).unwrap();
         assert_eq!(text, "hello\nworld");
+    }
+
+    #[test]
+    fn select_latest_message_prefers_newer_timestamp() {
+        let candidates = vec![(Some(100), 0, 5), (Some(200), 1, 2), (Some(150), 2, 9)];
+        let idx = select_latest_message_index(&candidates).unwrap();
+        assert_eq!(idx, 1);
+    }
+
+    #[test]
+    fn select_latest_message_falls_back_to_partition_offset() {
+        let candidates = vec![(None, 0, 5), (None, 1, 2), (None, 2, 9)];
+        let idx = select_latest_message_index(&candidates).unwrap();
+        assert_eq!(idx, 2);
     }
 }
 

@@ -36,6 +36,12 @@ pub enum Command {
         #[arg(value_name = "MESSAGE", trailing_var_arg = true)]
         message: Vec<String>,
     },
+    /// Read the latest inbound message from Kafka and print the raw JSON
+    Read {
+        /// Wait for a new message instead of reading the latest existing one
+        #[arg(long)]
+        wait: bool,
+    },
 }
 
 #[cfg(test)]
@@ -59,6 +65,19 @@ mod tests {
                 assert_eq!(chat_id, -123456789);
             }
             _ => panic!("expected send command"),
+        }
+    }
+
+    #[test]
+    fn parse_read_wait_flag() {
+        let cli = Cli::try_parse_from(["ratatoskr", "read", "--wait"])
+            .expect("expected read --wait to parse");
+
+        match cli.command {
+            super::Command::Read { wait } => {
+                assert!(wait);
+            }
+            _ => panic!("expected read command"),
         }
     }
 }
