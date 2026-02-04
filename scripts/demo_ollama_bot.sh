@@ -38,6 +38,36 @@ is_allowed_chat_id() {
   return 1
 }
 
+ingest_message() {
+  local chat_id="$1"
+  local trace_id="$2"
+  local role="$3"
+  local content="$4"
+  printf '%s' "$content" | reservoir ingest --partition="$chat_id" --instance="$chat_id" --role="$role" --trace-id="$trace_id" >/dev/null
+}
+
+fetch_context() {
+  local chat_id="$1"
+  local query="$2"
+  local recent semantic output=""
+  recent="$(reservoir view 5 --partition="$chat_id" --instance="$chat_id" 2>/dev/null || true)"
+  semantic="$(reservoir search --semantic --link "$query" --partition="$chat_id" --instance="$chat_id" 2>/dev/null || true)"
+  if [[ -n "$semantic" ]]; then
+    output="<system>The following messages are semantically related to the current query from your long-term memory:</system>
+${semantic}"
+  fi
+  if [[ -n "$recent" ]]; then
+    if [[ -n "$output" ]]; then
+      output="${output}
+
+"
+    fi
+    output="${output}<system>The following are the most recent messages in this conversation:</system>
+${recent}"
+  fi
+  printf '%s' "$output"
+}
+
 while true; do
   raw_json="$(ratatoskr read --wait)"
   message_type="$(printf '%s' "$raw_json" | jq -r '.message_type.type')"
@@ -46,13 +76,19 @@ while true; do
     continue
   fi
 
-  chat_id="$(printf '%s' "$raw_json" | jq -r '.message_type.data.message.chat.id')"
+  chat_id="$(printf '%s' "$raw_json" | jq -r '.message_type.data.message.chat.id | tostring')"
+  chat_id="$(printf '%s' "$chat_id" | tr -d '[:space:]')"
+  trace_id="$(printf '%s' "$raw_json" | jq -r '.trace_id // empty')"
   text="$(printf '%s' "$raw_json" | jq -r '.message_type.data.message.text // empty')"
   username="$(printf '%s' "$raw_json" | jq -r '.message_type.data.message.from.username // empty')"
   first_name="$(printf '%s' "$raw_json" | jq -r '.message_type.data.message.from.first_name // empty')"
 
   if [[ -z "$text" ]]; then
     continue
+  fi
+
+  if [[ "${DEBUG_CHAT_IDS:-}" == "1" ]]; then
+    echo "DEBUG_CHAT_IDS: chat_id=${chat_id}" >&2
   fi
 
   if [[ "$chat_id" == -* ]] && [[ "$text" != *"@"* ]]; then
@@ -64,12 +100,29 @@ while true; do
     continue
   fi
 
+  if [[ -z "$trace_id" ]] || [[ "$trace_id" == "null" ]]; then
+    trace_id="$(cat /proc/sys/kernel/random/uuid)"
+  fi
+
+  ingest_message "$chat_id" "$trace_id" "user" "$text"
+
+  context="$(fetch_context "$chat_id" "$text")"
+
+  if [[ -n "$context" ]]; then
+    echo "--- Working memory for chat_id=${chat_id} ---" >&2
+    printf '%s\n' "$context" >&2
+    echo "--- End working memory ---" >&2
+  fi
+
   sender_label="$first_name"
   if [[ -n "$username" ]]; then
     sender_label="${sender_label} (@${username})"
   fi
 
   prompt="User: ${sender_label}\nMessage: ${text}";
+  if [[ -n "$context" ]]; then
+    prompt="Relevant context:\n${context}\n\n${prompt}"
+  fi
 
   response="$(ollama run --hidethinking "${OLLAMA_MODEL}" "$prompt")"
   response="$(printf '%s' "$response" | sed -e 's/[[:space:]]*$//')"
@@ -78,6 +131,7 @@ while true; do
     continue
   fi
 
-  printf '%s' "$response" | ratatoskr send --chat-id "$chat_id" >/dev/null
+  ingest_message "$chat_id" "$trace_id" "assistant" "$response"
+  printf '%s' "$response" | ratatoskr send --chat-id="$chat_id" --parse-mode Markdown >/dev/null
   echo "Replied to chat_id=${chat_id}" >&2
  done
