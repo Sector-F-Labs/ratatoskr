@@ -49,21 +49,23 @@ ingest_message() {
 fetch_context() {
   local chat_id="$1"
   local query="$2"
-  local recent semantic output=""
-  recent="$(reservoir view 5 --partition="$chat_id" --instance="$chat_id" 2>/dev/null || true)"
+  local thread semantic output=""
+  # Thread context: synapse-connected messages + minimum recent (hybrid strategy)
+  thread="$(reservoir thread --partition="$chat_id" --instance="$chat_id" 2>/dev/null || true)"
+  # Semantic search: long-term memory lookup for related messages
   semantic="$(reservoir search --semantic --link "$query" --partition="$chat_id" --instance="$chat_id" 2>/dev/null || true)"
   if [[ -n "$semantic" ]]; then
     output="<system>The following messages are semantically related to the current query from your long-term memory:</system>
 ${semantic}"
   fi
-  if [[ -n "$recent" ]]; then
+  if [[ -n "$thread" ]]; then
     if [[ -n "$output" ]]; then
       output="${output}
 
 "
     fi
-    output="${output}<system>The following are the most recent messages in this conversation:</system>
-${recent}"
+    output="${output}<system>The following is your current conversation thread:</system>
+${thread}"
   fi
   printf '%s' "$output"
 }
@@ -121,7 +123,7 @@ while true; do
 
   prompt="User: ${sender_label}\nMessage: ${text}";
   if [[ -n "$context" ]]; then
-    prompt="Relevant context:\n${context}\n\n${prompt}"
+    prompt="Relevant context:\n${context}\n\nCurrent user question:${prompt}"
   fi
 
   response="$(ollama run --hidethinking "${OLLAMA_MODEL}" "$prompt")"

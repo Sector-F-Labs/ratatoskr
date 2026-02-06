@@ -4,13 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=/home/divanvisagie/src/ratatoskr/.env
-ExecStart=/home/divanvisagie/.cargo/bin/ratatoskr
-WorkingDirectory=/home/divanvisagie/src/ratatoskr/
+EnvironmentFile=/home/divan/src/ratatoskr/.env
+ExecStart=/home/divan/.cargo/bin/ratatoskr serve
+WorkingDirectory=/home/divan/src/ratatoskr/
 Restart=always
 RestartSec=5
-User=divanvisagie
-Group=divanvisagie
+User=divan
+Group=divan
 
 # Logging
 StandardOutput=journal
