@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=__REMOTE_PATH__/.env
-ExecStart=__HOME__/.cargo/bin/ratatoskr
+Environment=TELEGRAM_BOT_TOKEN=__TELEGRAM_BOT_TOKEN__
+ExecStart=__HOME__/.cargo/bin/ratatoskr serve
 WorkingDirectory=__REMOTE_PATH__/
 Restart=always
 RestartSec=5
