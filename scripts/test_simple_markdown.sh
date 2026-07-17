@@ -8,7 +8,7 @@ source "$SCRIPT_DIR/setup_env.sh" || {
 }
 
 # Additional Kafka settings for this script
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"com.sectorflabs.ratatoskr.out"}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"ratatoskr.out"}
 
 # Get message text from command line argument or use default
 MESSAGE_TEXT=${1:-"Quick test: *bold* _italic_ \`code\` [link](https://example.com) and special chars: ()[]{}#+-=|.!"}
@@ -47,7 +47,7 @@ echo "Raw JSON:"
 cat "$TMP_FILE" | jq . 2>/dev/null || cat "$TMP_FILE"
 
 # Send the message to Kafka
-echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 # Clean up
 rm "$TMP_FILE"

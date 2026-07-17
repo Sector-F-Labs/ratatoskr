@@ -8,7 +8,7 @@ source "$SCRIPT_DIR/setup_env.sh" || {
 }
 
 # Additional Kafka settings for this script
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"com.sectorflabs.ratatoskr.out"}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"ratatoskr.out"}
 
 echo "Testing complex Telegram markdown formatting..."
 echo "=============================================="
@@ -40,7 +40,7 @@ cat > "$TMP_FILE1" << EOF
 }
 EOF
 
-echo "$CHAT_ID:$(cat "$TMP_FILE1" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE1" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE1"
 sleep 3
 
@@ -74,7 +74,7 @@ sed -i.bak "s/TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%dT%H:%M:%SZ")/g" "$TMP_FI
 sed -i.bak "s/CHAT_ID_PLACEHOLDER/$CHAT_ID/g" "$TMP_FILE2"
 rm "$TMP_FILE2.bak"
 
-echo "$CHAT_ID:$(cat "$TMP_FILE2" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE2" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE2"
 sleep 3
 
@@ -108,7 +108,7 @@ sed -i.bak "s/TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%dT%H:%M:%SZ")/g" "$TMP_FI
 sed -i.bak "s/CHAT_ID_PLACEHOLDER/$CHAT_ID/g" "$TMP_FILE3"
 rm "$TMP_FILE3.bak"
 
-echo "$CHAT_ID:$(cat "$TMP_FILE3" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE3" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE3"
 sleep 3
 
@@ -142,7 +142,7 @@ sed -i.bak "s/TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%dT%H:%M:%SZ")/g" "$TMP_FI
 sed -i.bak "s/CHAT_ID_PLACEHOLDER/$CHAT_ID/g" "$TMP_FILE4"
 rm "$TMP_FILE4.bak"
 
-echo "$CHAT_ID:$(cat "$TMP_FILE4" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE4" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE4"
 sleep 3
 
@@ -176,7 +176,7 @@ sed -i.bak "s/TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%dT%H:%M:%SZ")/g" "$TMP_FI
 sed -i.bak "s/CHAT_ID_PLACEHOLDER/$CHAT_ID/g" "$TMP_FILE5"
 rm "$TMP_FILE5.bak"
 
-echo "$CHAT_ID:$(cat "$TMP_FILE5" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE5" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE5"
 sleep 3
 
@@ -210,7 +210,7 @@ sed -i.bak "s/TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%dT%H:%M:%SZ")/g" "$TMP_FI
 sed -i.bak "s/CHAT_ID_PLACEHOLDER/$CHAT_ID/g" "$TMP_FILE6"
 rm "$TMP_FILE6.bak"
 
-echo "$CHAT_ID:$(cat "$TMP_FILE6" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE6" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE6"
 sleep 3
 
@@ -244,7 +244,7 @@ sed -i.bak "s/TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%dT%H:%M:%SZ")/g" "$TMP_FI
 sed -i.bak "s/CHAT_ID_PLACEHOLDER/$CHAT_ID/g" "$TMP_FILE7"
 rm "$TMP_FILE7.bak"
 
-echo "$CHAT_ID:$(cat "$TMP_FILE7" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE7" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE7"
 sleep 3
 
@@ -278,7 +278,7 @@ sed -i.bak "s/TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%dT%H:%M:%SZ")/g" "$TMP_FI
 sed -i.bak "s/CHAT_ID_PLACEHOLDER/$CHAT_ID/g" "$TMP_FILE8"
 rm "$TMP_FILE8.bak"
 
-echo "$CHAT_ID:$(cat "$TMP_FILE8" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE8" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE8"
 
 echo -e "\n============================================="

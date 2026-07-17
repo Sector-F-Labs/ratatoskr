@@ -31,10 +31,11 @@ if command -v kafka-topics.sh &> /dev/null; then
     KAFKA_TOPICS_CMD="kafka-topics.sh"
 fi
 
-# Set default values for variables
-KAFKA_BROKER=${KAFKA_BROKER:-"localhost:9092"}
-KAFKA_IN_TOPIC=${KAFKA_IN_TOPIC:-"com.sectorflabs.ratatoskr.in"}
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"com.sectorflabs.ratatoskr.out"}
+# Set default values for variables (must match the defaults in src/main.rs)
+KAFKA_BROKERS=${KAFKA_BROKERS:-"localhost:9092"}
+KAFKA_TOPIC_PREFIX=${KAFKA_TOPIC_PREFIX:-"ratatoskr"}
+KAFKA_IN_TOPIC=${KAFKA_IN_TOPIC:-"${KAFKA_TOPIC_PREFIX}.in"}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"${KAFKA_TOPIC_PREFIX}.out"}
 
 # Check if CHAT_ID is set
 if [ -z "$CHAT_ID" ]; then
@@ -53,15 +54,15 @@ fi
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo -e "${BLUE}=== Ratatoskr Environment ===${NC}"
     echo -e "CHAT_ID: ${YELLOW}$CHAT_ID${NC}"
-    echo -e "KAFKA_BROKER: ${GREEN}$KAFKA_BROKER${NC}"
+    echo -e "KAFKA_BROKERS: ${GREEN}$KAFKA_BROKERS${NC}"
     echo -e "KAFKA_IN_TOPIC: ${GREEN}$KAFKA_IN_TOPIC${NC}"
     echo -e "KAFKA_OUT_TOPIC: ${GREEN}$KAFKA_OUT_TOPIC${NC}"
 
     # Check if topics exist
     echo -e "\n${BLUE}Available Kafka Topics:${NC}"
-    $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --list || {
+    $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKERS --list || {
         echo -e "${RED}Failed to list Kafka topics${NC}"
-        echo "Make sure Kafka is running at $KAFKA_BROKER"
+        echo "Make sure Kafka is running at $KAFKA_BROKERS"
         exit 1
     }
 
@@ -69,17 +70,17 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo -e "\n${BLUE}Checking/Creating required topics:${NC}"
 
     # Check if input topic exists
-    if ! $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --list | grep -q "^$KAFKA_IN_TOPIC$"; then
+    if ! $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKERS --list | grep -q "^$KAFKA_IN_TOPIC$"; then
         echo -e "Creating topic: ${YELLOW}$KAFKA_IN_TOPIC${NC}"
-        $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --create --topic $KAFKA_IN_TOPIC --partitions 1 --replication-factor 1
+        $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKERS --create --topic $KAFKA_IN_TOPIC --partitions 1 --replication-factor 1
     else
         echo -e "Topic exists: ${GREEN}$KAFKA_IN_TOPIC${NC}"
     fi
 
     # Check if output topic exists
-    if ! $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --list | grep -q "^$KAFKA_OUT_TOPIC$"; then
+    if ! $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKERS --list | grep -q "^$KAFKA_OUT_TOPIC$"; then
         echo -e "Creating topic: ${YELLOW}$KAFKA_OUT_TOPIC${NC}"
-        $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKER --create --topic $KAFKA_OUT_TOPIC --partitions 1 --replication-factor 1
+        $KAFKA_TOPICS_CMD --bootstrap-server $KAFKA_BROKERS --create --topic $KAFKA_OUT_TOPIC --partitions 1 --replication-factor 1
     else
         echo -e "Topic exists: ${GREEN}$KAFKA_OUT_TOPIC${NC}"
     fi
@@ -87,5 +88,5 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo -e "\n${GREEN}Environment is ready for Ratatoskr scripts${NC}"
 else
     # When sourced, always show which broker we're using
-    echo -e "${BLUE}Using Kafka broker: ${GREEN}$KAFKA_BROKER${NC}"
+    echo -e "${BLUE}Using Kafka broker: ${GREEN}$KAFKA_BROKERS${NC}"
 fi

@@ -11,8 +11,8 @@ if [ -f .env ]; then
 fi
 
 # Configuration
-KAFKA_BROKER=${KAFKA_BROKER:-localhost:9092}
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-com.sectorflabs.ratatoskr.out}
+KAFKA_BROKERS=${KAFKA_BROKERS:-localhost:9092}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-ratatoskr.out}
 
 # Check if CHAT_ID is set
 if [ -z "$CHAT_ID" ]; then
@@ -52,7 +52,7 @@ echo "Message: $(cat "$TMP_FILE")"
 
 # Send to Kafka
 # Compact the JSON to a single line to avoid kafka-console-producer treating each line as separate message
-echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 echo "Typing indicator sent successfully!"
 echo "The bot should now show 'typing...' in chat $CHAT_ID"

@@ -4,45 +4,6 @@ This guide covers common runtime errors and their solutions when running Ratatos
 
 ## Kafka Connection Issues
 
-### Error: "Message production error: InvalidTopic"
-
-**Example Error:**
-```
-ERROR ratatoskr::telegram_handlers: Failed to send message to Kafka topic=./images key="message" message_id=6288 chat_id=70661797 error=Message production error: InvalidTopic (Broker: Invalid topic)
-```
-
-**Cause:** The image storage directory path is being used as the Kafka topic instead of the actual topic name. This happens because both `kafka_in_topic` and `image_storage_dir` are `Arc<String>` types, and dptree's dependency injection matches by type, not by parameter order.
-
-**Solution:** 
-1. Use wrapper types to distinguish between different string parameters:
-   ```rust
-   // In structs.rs
-   #[derive(Debug, Clone)]
-   pub struct KafkaInTopic(pub String);
-   
-   #[derive(Debug, Clone)]
-   pub struct ImageStorageDir(pub String);
-   ```
-
-2. Update handler signatures to use the wrapper types:
-   ```rust
-   pub async fn message_handler(
-       bot: Bot,
-       msg: Message,
-       producer: Arc<FutureProducer>,
-       kafka_in_topic: KafkaInTopic,
-       image_storage_dir: ImageStorageDir,
-   ) -> Result<(), Box<dyn Error + Send + Sync>> {
-   ```
-
-3. Update main.rs to create the wrapper types:
-   ```rust
-   let kafka_in_topic = KafkaInTopic(kafka_in_topic_val);
-   let image_storage_dir = ImageStorageDir(image_storage_dir);
-   ```
-
-**Prevention:** Use distinct wrapper types for parameters of the same underlying type in dependency injection systems.
-
 ### Error: "Kafka producer creation error"
 
 **Example Error:**
@@ -53,8 +14,8 @@ ERROR ratatoskr: Kafka producer creation error: BrokerTransportFailure
 **Cause:** Cannot connect to the Kafka broker.
 
 **Solutions:**
-1. Verify Kafka broker is running: `docker ps` or check your Kafka service
-2. Check the `KAFKA_BROKER` environment variable is correct
+1. Verify Kafka broker is running: `docker-compose up -d` (or check your Kafka service)
+2. Check the `KAFKA_BROKERS` environment variable is correct
 3. Test connectivity: `telnet localhost 9092` (or your broker address)
 4. Ensure no firewall is blocking the connection
 5. For Docker setups, verify network connectivity between containers
@@ -63,15 +24,15 @@ ERROR ratatoskr: Kafka producer creation error: BrokerTransportFailure
 
 **Example Error:**
 ```
-ERROR ratatoskr: Failed to subscribe to Kafka topic com.sectorflabs.ratatoskr.out: TopicNotFound
+ERROR ratatoskr: Failed to subscribe to Kafka topic ratatoskr.out: TopicNotFound
 ```
 
-**Cause:** The Kafka topic doesn't exist.
+**Cause:** The Kafka topic doesn't exist. Ratatoskr creates `{prefix}.in`/`{prefix}.out` automatically on startup (`ensure_topics`), so this usually means the broker was unreachable at startup.
 
 **Solutions:**
-1. Create the topic manually: `kafka-topics.sh --create --topic com.sectorflabs.ratatoskr.out --bootstrap-server localhost:9092`
+1. Create the topic manually: `kafka-topics.sh --create --topic ratatoskr.out --bootstrap-server localhost:9092`
 2. Enable auto-topic creation in Kafka configuration
-3. Check topic names for typos in environment variables
+3. Check `KAFKA_TOPIC_PREFIX` for typos
 
 ## Telegram Bot Issues
 
@@ -108,41 +69,13 @@ ERROR ratatoskr::kafka_processing: Error sending message to Telegram chat_id=123
 3. Check if the user blocked the bot
 4. Ensure message content complies with Telegram limits (4096 characters for text)
 
-## Image Download Issues
+## Incoming File Attachments
 
-### Error: "Failed to download image"
+Ratatoskr does not download files from Telegram — incoming `file_attachments` only carry the `file_id` and a `file_url`. If your consumer fails to fetch a file:
 
-**Example Error:**
-```
-ERROR ratatoskr::telegram_handlers: Failed to download image message_id=123 chat_id=456 file_id=AgACAgIAAxk error=HTTP 404
-```
-
-**Cause:** Image file not found on Telegram servers or bot lacks file access permissions.
-
-**Solutions:**
-1. Check bot permissions with @BotFather
-2. Verify the file hasn't expired (Telegram files have limited lifetime)
-3. Ensure bot has `can_read_all_group_messages` if needed
-
-### Error: "Permission denied" when saving images
-
-**Cause:** Insufficient filesystem permissions for image storage directory.
-
-**Solutions:**
-1. Check directory permissions: `ls -la ./images`
-2. Create directory with proper permissions: `mkdir -p ./images && chmod 755 ./images`
-3. Ensure the user running Ratatoskr has write access
-4. For Docker: check volume mount permissions
-
-### Error: "No space left on device"
-
-**Cause:** Insufficient disk space for image storage.
-
-**Solutions:**
-1. Free up disk space: `df -h` to check usage
-2. Implement image cleanup policies
-3. Use a different storage directory with more space
-4. Configure log rotation to prevent log files from consuming space
+1. Verify the `file_url` hasn't expired (Telegram file links are time-limited; re-fetch via the Bot API using `file_id` if needed)
+2. Check bot permissions with @BotFather (e.g. `can_read_all_group_messages` for group chats)
+3. Ensure your consumer has network access to `api.telegram.org`
 
 ## Message Processing Issues
 
@@ -150,7 +83,7 @@ ERROR ratatoskr::telegram_handlers: Failed to download image message_id=123 chat
 
 **Example Error:**
 ```
-ERROR ratatoskr::kafka_processing: Error deserializing message from Kafka payload topic=com.sectorflabs.ratatoskr.out error=missing field `message_type`
+ERROR ratatoskr::kafka_processing: Error deserializing message from Kafka payload topic=ratatoskr.out error=missing field `message_type`
 ```
 
 **Cause:** Malformed JSON in Kafka message or version mismatch between message formats.
@@ -158,8 +91,7 @@ ERROR ratatoskr::kafka_processing: Error deserializing message from Kafka payloa
 **Solutions:**
 1. Validate JSON format of messages being sent to Kafka
 2. Check for required fields in the message structure
-3. Use legacy format if needed for backwards compatibility
-4. Enable debug logging to see raw payload: `RUST_LOG=debug`
+3. Enable debug logging to see raw payload: `RUST_LOG=debug`
 
 ### Error: "Image file not found" when sending ImageMessage
 
@@ -197,10 +129,9 @@ ERROR ratatoskr::kafka_processing: Error deserializing message from Kafka payloa
 **Symptoms:** Gradual memory increase over time.
 
 **Solutions:**
-1. Monitor for image accumulation - implement cleanup
-2. Check for Kafka consumer lag
-3. Review log retention policies
-4. Consider implementing message batching
+1. Check for Kafka consumer lag
+2. Review log retention policies
+3. Consider implementing message batching
 
 ### Slow Message Processing
 
@@ -210,16 +141,15 @@ ERROR ratatoskr::kafka_processing: Error deserializing message from Kafka payloa
 1. Check Kafka broker performance
 2. Monitor network latency to Telegram API
 3. Implement async/parallel processing where appropriate
-4. Review image download timeouts
 
 ## Debug Strategies
 
 ### Enable Detailed Logging
 
 ```bash
-RUST_LOG=debug cargo run
+RUST_LOG=debug cargo run -- serve
 # or for specific modules
-RUST_LOG=ratatoskr=debug,rdkafka=info cargo run
+RUST_LOG=ratatoskr=debug,rdkafka=info cargo run -- serve
 ```
 
 ### Test Kafka Connectivity
@@ -246,7 +176,7 @@ curl "https://api.telegram.org/bot<YOUR_TOKEN>/getMe"
 kafka-topics.sh --list --bootstrap-server localhost:9092
 
 # Check topic details
-kafka-topics.sh --describe --topic com.sectorflabs.ratatoskr.in --bootstrap-server localhost:9092
+kafka-topics.sh --describe --topic ratatoskr.in --bootstrap-server localhost:9092
 ```
 
 ### Docker Troubleshooting

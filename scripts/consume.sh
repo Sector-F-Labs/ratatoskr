@@ -21,11 +21,11 @@ show_usage() {
     echo ""
     echo "Examples:"
     echo "  $0                                    # Consume from output topic indefinitely"
-    echo "  $0 com.sectorflabs.ratatoskr.in     # Consume from input topic"
-    echo "  $0 com.sectorflabs.ratatoskr.out 10 # Consume 10 messages from output topic"
+    echo "  $0 ratatoskr.in     # Consume from input topic"
+    echo "  $0 ratatoskr.out 10 # Consume 10 messages from output topic"
     echo ""
     echo "Environment variables:"
-    echo "  KAFKA_BROKER     - Kafka broker address (default: localhost:9092)"
+    echo "  KAFKA_BROKERS     - Kafka broker address (default: localhost:9092)"
     echo "  KAFKA_IN_TOPIC   - Input topic name"
     echo "  KAFKA_OUT_TOPIC  - Output topic name"
 }
@@ -37,11 +37,11 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
 fi
 
 echo "Consuming messages from topic: $TOPIC"
-echo "Kafka broker: $KAFKA_BROKER"
+echo "Kafka broker: $KAFKA_BROKERS"
 
 if [ -n "$NUM_MESSAGES" ]; then
     echo "Number of messages: $NUM_MESSAGES"
-    kafka-console-consumer --bootstrap-server "$KAFKA_BROKER" \
+    kafka-console-consumer --bootstrap-server "$KAFKA_BROKERS" \
                           --topic "$TOPIC" \
                           --from-beginning \
                           --max-messages "$NUM_MESSAGES" \
@@ -51,7 +51,7 @@ if [ -n "$NUM_MESSAGES" ]; then
                           --property print.timestamp=true
 else
     echo "Consuming indefinitely (press Ctrl+C to stop)"
-    kafka-console-consumer --bootstrap-server "$KAFKA_BROKER" \
+    kafka-console-consumer --bootstrap-server "$KAFKA_BROKERS" \
                           --topic "$TOPIC" \
                           --from-beginning \
                           --property print.key=true \

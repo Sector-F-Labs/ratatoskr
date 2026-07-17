@@ -11,8 +11,8 @@ if [ -f .env ]; then
 fi
 
 # Configuration
-KAFKA_BROKER=${KAFKA_BROKER:-localhost:9092}
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-com.sectorflabs.ratatoskr.out}
+KAFKA_BROKERS=${KAFKA_BROKERS:-localhost:9092}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-ratatoskr.out}
 
 # Check if CHAT_ID is set
 if [ -z "$CHAT_ID" ]; then
@@ -53,7 +53,7 @@ cat > "$TMP_FILE_TYPING" <<EOF
 EOF
 
 # Send typing message to Kafka
-echo "$CHAT_ID:$(cat "$TMP_FILE_TYPING" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE_TYPING" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 echo "   ✓ Typing indicator sent"
 
@@ -89,7 +89,7 @@ cat > "$TMP_FILE_TEXT" <<EOF
 EOF
 
 # Send text message to Kafka
-echo "$CHAT_ID:$(cat "$TMP_FILE_TEXT" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE_TEXT" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 echo "   ✓ Text message sent"
 echo ""

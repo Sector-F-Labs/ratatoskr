@@ -4,30 +4,31 @@ This document describes the unified message type system implemented in Ratatoskr
 
 ## Overview
 
-Ratatoskr now uses a single unified type system for all Kafka messages:
-- **`IncomingMessage`** - All messages sent TO Kafka (from Telegram to your application)
-- **`OutgoingMessage`** - All messages sent FROM Kafka (from your application to Telegram)
+Ratatoskr uses a single unified type system for all Kafka messages:
+- **`IncomingMessage`** - All messages sent TO Kafka (from Telegram to your application), published to the `{prefix}.in` topic
+- **`OutgoingMessage`** - All messages sent FROM Kafka (from your application to Telegram), consumed from the `{prefix}.out` topic
 
-This replaces the previous multiple separate types and provides a consistent, extensible structure for all message handling.
+`{prefix}` defaults to `ratatoskr` and is configurable via the `KAFKA_TOPIC_PREFIX` environment variable.
 
-## Incoming Messages (`KAFKA_IN_TOPIC`)
+## Incoming Messages (`{prefix}.in`)
 
 All messages from Telegram are wrapped in the `IncomingMessage` type:
 
 ```json
 {
+  "trace_id": "b3b3b3b3-b3b3-b3b3-b3b3-b3b3b3b3b3b3",
   "message_type": {
     "type": "TelegramMessage",
     "data": {
       "message": { /* Full Telegram Message object */ },
-      "downloaded_images": [
+      "file_attachments": [
         {
           "file_id": "AgACAgIAAxkDAAIC_mF...",
           "file_unique_id": "abc123def456",
-          "width": 1920,
-          "height": 1080,
+          "file_type": "Photo",
           "file_size": 245760,
-          "local_path": "/absolute/path/to/images/-123456789_42_abc123def456_1703123456.jpg"
+          "file_url": "https://api.telegram.org/file/bot<token>/photos/file_1.jpg",
+          "metadata": { "type": "Photo", "width": 1920, "height": 1080 }
         }
       ]
     }
@@ -40,6 +41,8 @@ All messages from Telegram are wrapped in the `IncomingMessage` type:
   }
 }
 ```
+
+Files are **not** downloaded by Ratatoskr — `file_attachments` gives you the Telegram `file_id` and a direct `file_url` so your own handler can fetch the bytes if it needs them.
 
 ### Incoming Message Types
 
@@ -58,7 +61,7 @@ Standard Telegram messages (text, photos, documents, etc.)
         "date": 1678901234,
         "text": "Hello bot!"
       },
-      "downloaded_images": []
+      "file_attachments": []
     }
   },
   "timestamp": "2023-12-01T10:30:00Z",
@@ -119,12 +122,35 @@ Emoji reactions that users add to or remove from messages
 }
 ```
 
-## Outgoing Messages (`KAFKA_OUT_TOPIC`)
+#### 4. EditedMessage
+A previously sent message that the user edited
+
+```json
+{
+  "message_type": {
+    "type": "EditedMessage",
+    "data": {
+      "message": { /* Full Telegram Message object, with updated content */ },
+      "file_attachments": [],
+      "edit_date": 1678901300
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "source": {
+    "platform": "telegram",
+    "bot_id": null,
+    "bot_username": null
+  }
+}
+```
+
+## Outgoing Messages (`{prefix}.out`)
 
 All messages to Telegram are wrapped in the `OutgoingMessage` type:
 
 ```json
 {
+  "trace_id": "b3b3b3b3-b3b3-b3b3-b3b3-b3b3b3b3b3b3",
   "message_type": {
     "type": "TextMessage",
     "data": {
@@ -147,6 +173,8 @@ All messages to Telegram are wrapped in the `OutgoingMessage` type:
   }
 }
 ```
+
+`trace_id` is optional on the way in — if omitted, Ratatoskr generates one.
 
 ### Outgoing Message Types
 
@@ -179,7 +207,7 @@ Send text messages with optional formatting and buttons
 ```
 
 #### 2. ImageMessage
-Send images stored on the local filesystem
+Send images stored on the local filesystem (the path must be reachable from where Ratatoskr runs)
 
 ```json
 {
@@ -202,7 +230,10 @@ Send images stored on the local filesystem
 }
 ```
 
-#### 3. DocumentMessage
+#### 3. AudioMessage / VoiceMessage / VideoMessage / VideoNoteMessage / StickerMessage / AnimationMessage
+Send other media types from the local filesystem, following the same `*_path` + optional `caption`/`buttons` shape as `ImageMessage`, plus type-specific fields (`duration`, `width`, `height`, `performer`, `title`, `supports_streaming`, `length`, `emoji` as applicable). See `src/kafka_processing/outgoing.rs` for the exact fields per type.
+
+#### 4. DocumentMessage
 Send documents/files stored on the local filesystem
 
 ```json
@@ -225,7 +256,7 @@ Send documents/files stored on the local filesystem
 }
 ```
 
-#### 4. EditMessage
+#### 5. EditMessage
 Edit previously sent messages
 
 ```json
@@ -249,7 +280,7 @@ Edit previously sent messages
 }
 ```
 
-#### 5. DeleteMessage
+#### 6. DeleteMessage
 Delete messages from the chat
 
 ```json
@@ -269,24 +300,25 @@ Delete messages from the chat
 }
 ```
 
-## Backwards Compatibility
+#### 7. TypingMessage
+Show the "typing..." indicator
 
-The old message formats are still supported for backwards compatibility:
-
-### Legacy Outgoing Format (Deprecated)
 ```json
 {
-  "chat_id": 123456789,
-  "text": "Hello from legacy format!",
-  "buttons": [
-    [
-      {"text": "Button 1", "callback_data": "action_1"}
-    ]
-  ]
+  "message_type": {
+    "type": "TypingMessage",
+    "data": {
+      "action": "typing"
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "target": {
+    "platform": "telegram",
+    "chat_id": 123456789,
+    "thread_id": null
+  }
 }
 ```
-
-This will be automatically converted to the new `OutgoingMessage` format internally.
 
 ## Common Fields
 
@@ -298,15 +330,15 @@ This will be automatically converted to the new `OutgoingMessage` format interna
 }
 ```
 
-### ImageInfo
+### FileInfo (incoming file attachments)
 ```json
 {
   "file_id": "AgACAgIAAxkDAAIC_mF...",
   "file_unique_id": "abc123def456",
-  "width": 1920,
-  "height": 1080,
+  "file_type": "Photo",
   "file_size": 245760,
-  "local_path": "/absolute/path/to/images/downloaded_image.jpg"
+  "file_url": "https://api.telegram.org/file/bot<token>/photos/file_1.jpg",
+  "metadata": { "type": "Photo", "width": 1920, "height": 1080 }
 }
 ```
 
@@ -334,64 +366,7 @@ This will be automatically converted to the new `OutgoingMessage` format interna
 2. **Extensibility** - Easy to add new message types without breaking changes
 3. **Type Safety** - Clear distinction between different message types
 4. **Metadata** - Rich context information (timestamps, source/target info)
-5. **Backwards Compatibility** - Legacy formats still work
-6. **Platform Agnostic** - Structure supports future platforms beyond Telegram
-
-## Migration Guide
-
-### From Legacy Incoming Messages
-
-**Old:**
-```json
-{
-  "message_id": 123,
-  "text": "Hello",
-  "downloaded_images": [...]
-}
-```
-
-**New:**
-```json
-{
-  "message_type": {
-    "type": "TelegramMessage",
-    "data": {
-      "message": { "message_id": 123, "text": "Hello", ... },
-      "downloaded_images": [...]
-    }
-  },
-  "timestamp": "2023-12-01T10:30:00Z",
-  "source": { "platform": "telegram", ... }
-}
-```
-
-### From Legacy Outgoing Messages
-
-**Old:**
-```json
-{
-  "chat_id": 123,
-  "text": "Hello",
-  "buttons": [...]
-}
-```
-
-**New:**
-```json
-{
-  "message_type": {
-    "type": "TextMessage",
-    "data": {
-      "text": "Hello",
-      "buttons": [...],
-      "parse_mode": null,
-      "disable_web_page_preview": null
-    }
-  },
-  "timestamp": "2023-12-01T10:30:00Z",
-  "target": { "platform": "telegram", "chat_id": 123, "thread_id": null }
-}
-```
+5. **Platform Agnostic** - Structure supports future platforms beyond Telegram
 
 ## Examples
 
@@ -402,7 +377,7 @@ match incoming_message.message_type {
     IncomingMessageType::TelegramMessage(data) => {
         // Handle regular message
         let telegram_msg = &data.message;
-        let images = &data.downloaded_images;
+        let attachments = &data.file_attachments;
         // Process message...
     }
     IncomingMessageType::CallbackQuery(data) => {
@@ -411,31 +386,41 @@ match incoming_message.message_type {
         let user_id = data.user_id;
         // Process callback...
     }
+    IncomingMessageType::MessageReaction(data) => {
+        // Handle emoji reaction change
+    }
+    IncomingMessageType::EditedMessage(data) => {
+        // Handle an edited message
+    }
 }
 ```
 
 ### Creating Outgoing Messages
 
 ```rust
-// Text message with buttons
-let msg = OutgoingMessage::new_text_message(
-    chat_id,
-    "Choose an option:".to_string(),
-    Some(vec![
-        vec![
-            ButtonInfo { text: "Option A".to_string(), callback_data: "opt_a".to_string() },
-            ButtonInfo { text: "Option B".to_string(), callback_data: "opt_b".to_string() }
-        ]
-    ])
-);
+use ratatoskr::kafka_processing::outgoing::{
+    ButtonInfo, MessageTarget, OutgoingMessage, OutgoingMessageType, TextMessageData,
+};
 
-// Send image
-let img_msg = OutgoingMessage::new_image_message(
-    chat_id,
-    "/path/to/image.jpg".to_string(),
-    Some("Beautiful sunset!".to_string()),
-    None
-);
+let msg = OutgoingMessage {
+    trace_id: uuid::Uuid::new_v4(),
+    message_type: OutgoingMessageType::TextMessage(TextMessageData {
+        text: "Choose an option:".to_string(),
+        buttons: Some(vec![vec![
+            ButtonInfo { text: "Option A".to_string(), callback_data: "opt_a".to_string() },
+            ButtonInfo { text: "Option B".to_string(), callback_data: "opt_b".to_string() },
+        ]]),
+        reply_keyboard: None,
+        parse_mode: None,
+        disable_web_page_preview: None,
+    }),
+    timestamp: chrono::Utc::now(),
+    target: MessageTarget {
+        platform: "telegram".to_string(),
+        chat_id,
+        thread_id: None,
+    },
+};
 ```
 
-This unified system provides a robust foundation for handling all types of Telegram interactions while maintaining backwards compatibility and enabling future enhancements.
+Serialize `msg` to JSON and publish it to the `{prefix}.out` Kafka topic (or use `ratatoskr send`, see the main [README](../README.md)).

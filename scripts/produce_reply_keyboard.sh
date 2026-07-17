@@ -8,7 +8,7 @@ source "$SCRIPT_DIR/setup_env.sh" || {
 }
 
 # Additional Kafka settings for this script
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"com.sectorflabs.ratatoskr.out"}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"ratatoskr.out"}
 
 # Set a default message text
 MESSAGE_TEXT=${1:-"Please share your location or contact using the buttons below:"}
@@ -75,7 +75,7 @@ cat "$TMP_FILE" | jq 2>/dev/null || cat "$TMP_FILE"
 
 # Send the message to Kafka directly from the file with chat_id as key for proper partitioning
 # Compact the JSON to a single line to avoid kafka-console-producer treating each line as separate message
-echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 # Clean up
 rm "$TMP_FILE"

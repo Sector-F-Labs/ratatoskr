@@ -8,10 +8,10 @@ source "$SCRIPT_DIR/setup_env.sh" || {
 }
 
 # Additional Kafka settings for this script
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"com.sectorflabs.ratatoskr.out"}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"ratatoskr.out"}
 
 echo "Testing backward compatibility for trace IDs..."
-echo "KAFKA_BROKER: $KAFKA_BROKER"
+echo "KAFKA_BROKERS: $KAFKA_BROKERS"
 echo "KAFKA_OUT_TOPIC: $KAFKA_OUT_TOPIC"
 echo "CHAT_ID: $CHAT_ID"
 echo ""
@@ -44,7 +44,7 @@ echo "Sending message WITH trace_id:"
 cat "$TMP_FILE_WITH_TRACE" | jq .
 echo ""
 
-echo "$CHAT_ID:$(cat "$TMP_FILE_WITH_TRACE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE_WITH_TRACE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 if [ $? -eq 0 ]; then
     echo "✅ Message with trace_id sent successfully"
@@ -86,7 +86,7 @@ echo "Sending message WITHOUT trace_id (should auto-generate one):"
 cat "$TMP_FILE_WITHOUT_TRACE" | jq .
 echo ""
 
-echo "$CHAT_ID:$(cat "$TMP_FILE_WITHOUT_TRACE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE_WITHOUT_TRACE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 if [ $? -eq 0 ]; then
     echo "✅ Message without trace_id sent successfully"
@@ -136,7 +136,7 @@ echo "Sending complex message WITHOUT trace_id:"
 cat "$TMP_FILE_COMPLEX" | jq .
 echo ""
 
-echo "$CHAT_ID:$(cat "$TMP_FILE_COMPLEX" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE_COMPLEX" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 if [ $? -eq 0 ]; then
     echo "✅ Complex message without trace_id sent successfully"

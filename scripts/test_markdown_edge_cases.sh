@@ -8,7 +8,7 @@ source "$SCRIPT_DIR/setup_env.sh" || {
 }
 
 # Additional Kafka settings for this script
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"com.sectorflabs.ratatoskr.out"}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"ratatoskr.out"}
 
 echo "Testing Telegram MarkdownV2 edge cases..."
 echo "========================================"
@@ -46,7 +46,7 @@ send_test_message() {
 EOF
 
     echo "Sending: $message_text"
-    echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+    echo "$CHAT_ID:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
     rm "$TMP_FILE"
     sleep 2
 }

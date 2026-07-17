@@ -8,7 +8,7 @@ source "$SCRIPT_DIR/setup_env.sh" || {
 }
 
 # Additional Kafka settings for this script
-KAFKA_IN_TOPIC=${KAFKA_IN_TOPIC:-"com.sectorflabs.ratatoskr.in"}
+KAFKA_IN_TOPIC=${KAFKA_IN_TOPIC:-"ratatoskr.in"}
 
 # Set default message ID and callback data
 MESSAGE_ID=${1:-"1234"}
@@ -32,7 +32,7 @@ cat "$TMP_FILE" | jq 2>/dev/null || cat "$TMP_FILE"
 
 # Use kafka-console-producer to produce the message with the specified key
 # Compact the JSON to a single line to avoid kafka-console-producer treating each line as separate message
-echo "$KEY:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_IN_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$KEY:$(cat "$TMP_FILE" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_IN_TOPIC" --property "key.separator=:" --property "parse.key=true"
 
 # Clean up
 rm "$TMP_FILE"

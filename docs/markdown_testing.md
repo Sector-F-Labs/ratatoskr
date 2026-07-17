@@ -184,8 +184,8 @@ Ensure these environment variables are set (copy from `.envrc.example`):
 
 ```bash
 export CHAT_ID="your_telegram_chat_id"
-export KAFKA_BROKER="localhost:9092"
-export KAFKA_OUT_TOPIC="com.sectorflabs.ratatoskr.out"
+export KAFKA_BROKERS="localhost:9092"
+export KAFKA_OUT_TOPIC="ratatoskr.out"
 ```
 
 ## Debugging Tips

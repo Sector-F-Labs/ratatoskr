@@ -8,7 +8,7 @@ source "$SCRIPT_DIR/setup_env.sh" || {
 }
 
 # Additional Kafka settings for this script
-KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"com.sectorflabs.ratatoskr.out"}
+KAFKA_OUT_TOPIC=${KAFKA_OUT_TOPIC:-"ratatoskr.out"}
 
 echo "Testing auto-organized button functionality..."
 echo "============================================="
@@ -47,7 +47,7 @@ cat > "$TMP_FILE1" << EOF
 }
 EOF
 
-echo "$CHAT_ID:$(cat "$TMP_FILE1" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE1" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE1"
 sleep 2
 
@@ -86,7 +86,7 @@ cat > "$TMP_FILE2" << EOF
 }
 EOF
 
-echo "$CHAT_ID:$(cat "$TMP_FILE2" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE2" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE2"
 sleep 2
 
@@ -119,7 +119,7 @@ cat > "$TMP_FILE3" << EOF
 }
 EOF
 
-echo "$CHAT_ID:$(cat "$TMP_FILE3" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE3" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE3"
 sleep 2
 
@@ -165,7 +165,7 @@ cat > "$TMP_FILE4" << EOF
 }
 EOF
 
-echo "$CHAT_ID:$(cat "$TMP_FILE4" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE4" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE4"
 sleep 2
 
@@ -201,7 +201,7 @@ cat > "$TMP_FILE5" << EOF
 }
 EOF
 
-echo "$CHAT_ID:$(cat "$TMP_FILE5" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
+echo "$CHAT_ID:$(cat "$TMP_FILE5" | jq -c .)" | kafka-console-producer --bootstrap-server "$KAFKA_BROKERS" --topic "$KAFKA_OUT_TOPIC" --property "key.separator=:" --property "parse.key=true"
 rm "$TMP_FILE5"
 
 echo -e "\n============================================="

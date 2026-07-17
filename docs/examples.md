@@ -213,14 +213,14 @@ Here's what you receive when a user sends a message with an image:
         ],
         "caption": "Look at this sunset!"
       },
-      "downloaded_images": [
+      "file_attachments": [
         {
           "file_id": "AgACAgIAAxkDAAIBXGV...",
           "file_unique_id": "AQADyBUAAhoFqFN-",
-          "width": 1280,
-          "height": 960,
+          "file_type": "Photo",
           "file_size": 89032,
-          "local_path": "/absolute/path/to/images/123456789_156_AQADyBUAAhoFqFN-_1701432600.jpg"
+          "file_url": "https://api.telegram.org/file/bot<token>/photos/file_2.jpg",
+          "metadata": { "type": "Photo", "width": 1280, "height": 960 }
         }
       ]
     }

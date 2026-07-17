@@ -1,6 +1,6 @@
 # Ratatoskr
 
-A lightweight Telegram <-> process bridge written in **Rust**, designed to stream Telegram updates over stdout and accept responses via a named pipe.
+A Telegram <-> Kafka bridge written in **Rust**. It streams inbound Telegram updates onto a Kafka topic and delivers outbound messages read from another Kafka topic back to Telegram, with optional per-user authorization.
 
 ![Logo](docs/logo-256.png)
 
@@ -9,58 +9,64 @@ A lightweight Telegram <-> process bridge written in **Rust**, designed to strea
 ## 🚀 Features
 
 * Uses [`teloxide`](https://github.com/teloxide/teloxide) for Telegram bot integration
-* Streams inbound Telegram updates as newline-delimited JSON to **stdout**
-* Reads outbound `OutgoingMessage` JSON lines from a named pipe (`PIPE_OUTBOUND_PATH`) and delivers them to Telegram
-* Minimal, event-driven, and broker-free—great for chaining with shell pipelines
+* Publishes inbound Telegram updates as JSON to the `{prefix}.in` Kafka topic
+* Consumes `OutgoingMessage` JSON from the `{prefix}.out` Kafka topic and delivers it to Telegram
+* Supports text, image, audio, voice, video, video note, document, sticker, and animation messages, plus message edit/delete and typing indicators
+* Optional per-user auth (`users.toml`) that gates which Telegram users/IDs may talk to the bot
+* CLI with `serve`, `users` (add/remove/list), and `send` (publish a message straight to Kafka) subcommands
 
 ## 📦 Prerequisites
 
 * [Rust](https://www.rust-lang.org/tools/install)
 * A Telegram bot token from [@BotFather](https://t.me/BotFather)
-* A handler that reads JSONL from stdin and writes JSONL responses to a named pipe
+* A running Kafka broker (a `docker-compose.yml` with Kafka, Zookeeper, and an AKHQ UI is provided)
 
 ## ⚙️ Setup
 
 1. **Clone the repository:**
 
    ```sh
-   git clone https://github.com/yourusername/ratatoskr.git
+   git clone https://github.com/sector-f-labs/ratatoskr.git
    cd ratatoskr
    ```
 
-   Alternatively, you can download the source code directly from the [GitHub repository](https://github.com/yourusername/ratatoskr/releases).
+2. **Start Kafka:**
 
-2. **Set environment variables:**
+   ```sh
+   docker-compose up -d
+   ```
+
+   This brings up Kafka on `localhost:9092`, Zookeeper, and an AKHQ UI at `http://localhost:8080` for inspecting topics.
+
+3. **Set environment variables:**
 
    * `TELEGRAM_BOT_TOKEN` (**required**)
-   * `PIPE_OUTBOUND_PATH` (optional, default: `./ratatoskr_out.pipe`)
+   * `KAFKA_BROKERS` (optional, default: `localhost:9092`)
+   * `KAFKA_TOPIC_PREFIX` (optional, default: `ratatoskr` — topics become `{prefix}.in` / `{prefix}.out`)
 
-   You can place these in a `.env` file or export them in your shell. A `.env.example` file is provided as a template.
+   You can place these in a `.env` file (loaded automatically via `dotenv`) or export them in your shell.
 
-   **Using direnv (recommended):**
+4. **(Optional) Configure allowed users:**
+
+   By default, with no `users.toml`, auth is disabled and all messages pass through. To restrict who can talk to the bot:
+
    ```sh
-   cp .envrc.example .envrc
-   # Edit .envrc with your configuration
-   direnv allow
+   cargo run --release -- users add --system-user alice --username alice_tg --promote
    ```
 
-   **Or using a .env file:**
-   ```sh
-   cp .envrc.example .env
-   # Edit .env with your configuration
-   ```
+   This writes to `/etc/ratatoskr/users.toml` by default; pass `--users-file <path>` (before the subcommand) to use a different location.
 
-3. **Build and run the bot:**
+5. **Build and run the bot:**
 
    ```sh
    cargo build --release
-   ./target/release/ratatoskr
+   ./target/release/ratatoskr serve
    ```
 
    Or simply:
-   
+
    ```sh
-   cargo run --release
+   cargo run --release -- serve
    ```
 
 ## 🔄 Development
@@ -69,7 +75,7 @@ For development with auto-reload:
 
 ```sh
 cargo install cargo-watch
-cargo watch -x run
+cargo watch -x 'run -- serve'
 ```
 
 To run tests:
@@ -78,32 +84,21 @@ To run tests:
 cargo test
 ```
 
-### Pipe mode (broker-free)
-
-Run Ratatoskr and stream Telegram updates into your handler:
+### CLI commands
 
 ```sh
-mkfifo /tmp/ratatoskr_out.pipe
-PIPE_OUTBOUND_PATH=/tmp/ratatoskr_out.pipe TELEGRAM_BOT_TOKEN=... cargo run --release \
-  | ./your-handler-script \
-  > /tmp/ratatoskr_out.pipe
+ratatoskr serve                       # Run the bot: consumes Telegram updates, bridges to/from Kafka
+ratatoskr users add --system-user <name> [--username <tg_username>]... [--promote]
+ratatoskr users remove --system-user <name>
+ratatoskr users list
+ratatoskr send --chat-id <id> [--parse-mode HTML|Markdown] [--thread-id <id>] <message text>
 ```
 
-Behavior:
-- Incoming Telegram updates are printed as JSONL (one JSON object per line) to stdout.
-- Your handler reads that stream, emits JSONL `OutgoingMessage` objects to the named pipe, and Ratatoskr sends them to Telegram.
+`send` publishes an `OutgoingMessage` directly to the `{prefix}.out` topic (reading from stdin and/or a trailing positional message), which is useful for testing without going through your own producer.
 
-#### Quick black-box check (service running)
+### Inspecting topics directly
 
-With Ratatoskr running in pipe mode and `CHAT_ID` set to your chat:
-
-```sh
-export PIPE_OUTBOUND_PATH=/tmp/ratatoskr_out.pipe
-export CHAT_ID=123456789
-make test_pipe   # writes a sample TextMessage to the pipe
-```
-
-You should receive "Hello from pipe test" in the target chat.
+With Kafka running, `scripts/produce.sh` and `scripts/consume.sh` are convenience wrappers around `kafka-console-producer`/`kafka-console-consumer` for manually publishing/reading messages on the topics (see `scripts/setup_env.sh` for the env vars they expect).
 
 ----
 
@@ -137,7 +132,7 @@ cd docs/types
 ./generate-types.sh  # Generates types for all supported languages
 ```
 
-### Incoming message stream (stdout)
+### Incoming messages published to the `{prefix}.in` Kafka topic
 
 All messages from Telegram are wrapped in the unified `IncomingMessage` type:
 
@@ -154,14 +149,14 @@ All messages from Telegram are wrapped in the unified `IncomingMessage` type:
         "date": 1678901234,
         "text": "Hello bot!"
       },
-      "downloaded_images": [
+      "file_attachments": [
         {
           "file_id": "AgACAgIAAxkDAAIC_mF...",
           "file_unique_id": "abc123def456",
-          "width": 1920,
-          "height": 1080,
+          "file_type": "Photo",
           "file_size": 245760,
-          "local_path": "/absolute/path/to/images/-123456789_42_abc123def456_1703123456.jpg"
+          "file_url": "https://api.telegram.org/file/bot<token>/photos/file_1.jpg",
+          "metadata": { "type": "Photo", "width": 1920, "height": 1080 }
         }
       ]
     }
@@ -224,7 +219,7 @@ All messages from Telegram are wrapped in the unified `IncomingMessage` type:
 }
 ```
 
-### Outgoing messages read from `PIPE_OUTBOUND_PATH`
+### Outgoing messages read from the `{prefix}.out` Kafka topic
 
 All messages to Telegram use the unified `OutgoingMessage` type:
 
@@ -300,24 +295,16 @@ This message will cause the bot to display the "typing..." indicator in the spec
 
 - **TextMessage** - Send text with optional formatting and buttons
 - **ImageMessage** - Send images from local filesystem
-- **DocumentMessage** - Send documents/files from local filesystem  
+- **AudioMessage** - Send audio files
+- **VoiceMessage** - Send voice notes
+- **VideoMessage** - Send videos
+- **VideoNoteMessage** - Send round video notes
+- **DocumentMessage** - Send documents/files from local filesystem
+- **StickerMessage** - Send stickers
+- **AnimationMessage** - Send GIFs/animations
 - **EditMessage** - Edit previously sent messages
 - **DeleteMessage** - Delete messages from chat
 - **TypingMessage** - Show typing indicator (bot is busy)
-
-### Legacy Format Support
-
-The old message format is still supported for backwards compatibility:
-
-```json
-{
-  "chat_id": 123456789,
-  "text": "Hello from legacy format!",
-  "buttons": [
-    [{"text": "Button", "callback_data": "action"}]
-  ]
-}
-```
 
 For complete documentation, see [Unified Message Types](docs/unified_message_types.md).
 For practical examples and usage patterns, see [Examples](docs/examples.md).

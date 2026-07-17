@@ -1,18 +1,16 @@
-.PHONY: help build install run dev test pipe coverage
-
-PIPE_OUTBOUND_PATH ?= ./ratatoskr_out.pipe
+.PHONY: help build install run dev test coverage kafka-up kafka-down
 
 help:
-	@echo "Ratatoskr - Telegram <-> handler bridge (pipe mode only)"
+	@echo "Ratatoskr - Telegram <-> Kafka bridge"
 	@echo "Targets:"
-	@echo "  build     - cargo build"
-	@echo "  install   - cargo install --path ."
-	@echo "  run       - cargo run"
-	@echo "  dev       - cargo watch -x run"
-	@echo "  test      - cargo test"
-	@echo "  pipe      - mkfifo $${PIPE_OUTBOUND_PATH} if missing"
-	@echo "  coverage  - run tests with llvm-cov and show coverage report"
-	@echo "  test_pipe - write a sample OutgoingMessage JSON into the pipe (requires CHAT_ID)"
+	@echo "  build      - cargo build"
+	@echo "  install    - cargo install --path ."
+	@echo "  run        - cargo run -- serve"
+	@echo "  dev        - cargo watch -x 'run -- serve'"
+	@echo "  test       - cargo test"
+	@echo "  coverage   - run tests with llvm-cov and show coverage report"
+	@echo "  kafka-up   - start Kafka/Zookeeper/AKHQ via docker-compose"
+	@echo "  kafka-down - stop the docker-compose stack"
 
 build:
 	cargo build
@@ -21,10 +19,10 @@ install:
 	cargo install --path .
 
 run:
-	cargo run
+	cargo run -- serve
 
 dev:
-	cargo watch -x run
+	cargo watch -x 'run -- serve'
 
 test:
 	cargo test
@@ -34,13 +32,8 @@ coverage:
 	@echo ""
 	@echo "For a detailed HTML report: cargo llvm-cov --html --open"
 
-pipe:
-	@if [ ! -p "$(PIPE_OUTBOUND_PATH)" ]; then \
-		mkfifo "$(PIPE_OUTBOUND_PATH)"; \
-		echo "Created pipe at $(PIPE_OUTBOUND_PATH)"; \
-	else \
-		echo "Pipe already exists at $(PIPE_OUTBOUND_PATH)"; \
-	fi
+kafka-up:
+	docker-compose up -d
 
-test_pipe:
-	PIPE_OUTBOUND_PATH=$(PIPE_OUTBOUND_PATH) ./scripts/test_pipe_outbound.sh
+kafka-down:
+	docker-compose down
