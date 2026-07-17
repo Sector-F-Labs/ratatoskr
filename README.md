@@ -100,6 +100,44 @@ ratatoskr send --chat-id <id> [--parse-mode HTML|Markdown] [--thread-id <id>] <m
 
 With Kafka running, `scripts/produce.sh` and `scripts/consume.sh` are convenience wrappers around `kafka-console-producer`/`kafka-console-consumer` for manually publishing/reading messages on the topics (see `scripts/setup_env.sh` for the env vars they expect).
 
+### 🦾 Cross-compiling for ARM (e.g. Raspberry Pi)
+
+You can build an ARM binary on an x86 machine and copy it over, without compiling on the target device. This uses [`cross`](https://github.com/cross-rs/cross), which runs the build inside a Docker container with the right toolchain.
+
+1. **Install `cross` and `rustup`:**
+
+   ```sh
+   cargo install cross --git https://github.com/cross-rs/cross
+   ```
+
+2. **Build for `aarch64-unknown-linux-musl`:**
+
+   ```sh
+   CC=aarch64-linux-musl-gcc \
+   CXX=aarch64-linux-musl-g++ \
+   AR=aarch64-linux-musl-ar \
+   RANLIB=aarch64-linux-musl-ranlib \
+   CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc \
+   CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++ \
+   AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar \
+   cross build --release --target aarch64-unknown-linux-musl
+   ```
+
+   The resulting binary is at `target/aarch64-unknown-linux-musl/release/ratatoskr`.
+
+3. **Copy it to the target device and run it:**
+
+   ```sh
+   scp target/aarch64-unknown-linux-musl/release/ratatoskr user@device:/tmp/ratatoskr
+   ssh user@device 'chmod +x /tmp/ratatoskr && /tmp/ratatoskr --help'
+   ```
+
+**Why `musl` and not `gnu`:** the `aarch64-unknown-linux-gnu` cross image ships a newer glibc than many ARM devices (e.g. a Raspberry Pi on Debian 12 has glibc 2.36), so a `gnu`-targeted binary can fail to run with an error like `GLIBC_2.38' not found`. The `musl` target statically links libc instead, sidestepping glibc version compatibility entirely.
+
+**Why the explicit `CC`/`AR` env vars:** `rdkafka-sys` vendors and builds `librdkafka` from C source using its own build system, which doesn't reliably pick up the target cross-compiler on its own and can silently link host-architecture object files into the binary. The env vars above force it to use the correct cross toolchain. This repo's `Cross.toml` passes them through into the build container.
+
+**Why `openssl` is a direct dependency:** it's added with the `vendored` feature so OpenSSL is compiled from source for the target architecture, rather than requiring `libssl-dev` to be cross-installed for the target arch in the build container.
+
 ----
 
 ## 📤 Unified Message Types

@@ -1,0 +1,10 @@
+[build.env]
+passthrough = [
+    "CC",
+    "CXX",
+    "AR",
+    "RANLIB",
+    "CC_aarch64_unknown_linux_musl",
+    "CXX_aarch64_unknown_linux_musl",
+    "AR_aarch64_unknown_linux_musl",
+]
