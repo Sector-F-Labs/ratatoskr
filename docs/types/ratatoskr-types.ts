@@ -33,7 +33,8 @@ export type IncomingMessageType =
   | { type: "TelegramMessage"; data: TelegramMessageData }
   | { type: "CallbackQuery"; data: CallbackQueryData }
   | { type: "MessageReaction"; data: MessageReactionData }
-  | { type: "EditedMessage"; data: EditedMessageData };
+  | { type: "EditedMessage"; data: EditedMessageData }
+  | { type: "MessageSent"; data: MessageSentData };
 
 /**
  * Data for incoming Telegram messages
@@ -78,6 +79,21 @@ export interface EditedMessageData {
   file_attachments: FileInfo[];
   /** Edit date from Telegram (when the message was edited) */
   edit_date?: number; // Unix timestamp
+}
+
+/**
+ * Confirms an OutgoingMessage was actually delivered, carrying the real
+ * Telegram message_id it was sent as - producers of OutgoingMessage never
+ * otherwise learn that id, since sending happens entirely on ratatoskr's
+ * side. Delivered on the IN topic, not a separate one, because it flows in
+ * the same direction as everything else there. Unlike other IncomingMessage
+ * types, `trace_id` on the envelope here is the *outgoing* message's own
+ * trace_id (not freshly generated), so a producer can correlate this back
+ * to whichever message it published.
+ */
+export interface MessageSentData {
+  chat_id: number;
+  message_id: number;
 }
 
 /**

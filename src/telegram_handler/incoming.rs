@@ -19,6 +19,15 @@ pub enum IncomingMessageType {
     CallbackQuery(CallbackQueryData),
     MessageReaction(MessageReactionData),
     EditedMessage(EditedMessageData),
+    /// Confirms an OutgoingMessage was actually delivered, carrying the real
+    /// Telegram message_id Telegram assigned it - consumers publish
+    /// OutgoingMessages without ever learning that id otherwise, since
+    /// sending happens entirely on this side. Delivered on the IN topic
+    /// (not a separate one) because it flows in the same direction as
+    /// everything else there (ratatoskr -> consumer), and the trace_id here
+    /// is the *outgoing* message's own trace_id (not a fresh one), so a
+    /// consumer can correlate this back to whichever message it sent.
+    MessageSent(MessageSentData),
 }
 
 /// Data for incoming Telegram messages
@@ -28,6 +37,12 @@ pub struct TelegramMessageData {
     pub message: TelegramMessage,
     /// File attachments with download URLs - files are not downloaded yet
     pub file_attachments: Vec<FileInfo>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MessageSentData {
+    pub chat_id: i64,
+    pub message_id: i32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -234,6 +249,23 @@ impl IncomingMessage {
                 platform: "telegram".to_string(),
                 bot_id,
                 bot_username,
+            },
+        }
+    }
+
+    /// Unlike the other constructors, `trace_id` is taken as a parameter
+    /// rather than freshly generated - it must be the *outgoing* message's
+    /// own trace_id, so whoever published that OutgoingMessage can correlate
+    /// this delivery confirmation back to it.
+    pub fn new_message_sent(trace_id: Uuid, chat_id: i64, message_id: i32) -> Self {
+        Self {
+            trace_id,
+            message_type: IncomingMessageType::MessageSent(MessageSentData { chat_id, message_id }),
+            timestamp: Utc::now(),
+            source: MessageSource {
+                platform: "telegram".to_string(),
+                bot_id: None,
+                bot_username: None,
             },
         }
     }

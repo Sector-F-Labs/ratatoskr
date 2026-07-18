@@ -1,5 +1,6 @@
 use self::outgoing::{OutgoingMessage, OutgoingMessageType};
 use crate::broker::MessageBroker;
+use crate::telegram_handler::incoming::IncomingMessage;
 use crate::utils::{create_markup, create_reply_keyboard, format_telegram_markdown};
 use futures_util::StreamExt;
 use std::path::Path;
@@ -14,6 +15,24 @@ use teloxide::{
     types::{InputFile, ParseMode},
 };
 use tracing::Instrument;
+use uuid::Uuid;
+
+/// Publishes a `MessageSent` confirmation on the IN topic so whoever
+/// produced this `OutgoingMessage` can learn the real Telegram `message_id`
+/// it was actually sent as - not otherwise knowable, since sending happens
+/// entirely on this side. Not fatal if this fails: the message itself was
+/// already delivered successfully, only the confirmation is lost.
+async fn report_message_sent(broker: &Arc<dyn MessageBroker>, trace_id: Uuid, chat_id: i64, message_id: i32) {
+    let incoming = IncomingMessage::new_message_sent(trace_id, chat_id, message_id);
+    match serde_json::to_string(&incoming) {
+        Ok(json) => {
+            if let Err(e) = broker.publish(None, json.as_bytes()).await {
+                tracing::warn!(%trace_id, error = %e, "failed to publish MessageSent confirmation");
+            }
+        }
+        Err(e) => tracing::warn!(%trace_id, error = %e, "failed to serialize MessageSent confirmation"),
+    }
+}
 
 pub mod outgoing;
 
@@ -41,9 +60,11 @@ where
 
 async fn handle_outgoing_message(
     bot: &Bot,
+    broker: &Arc<dyn MessageBroker>,
     message: OutgoingMessage,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let chat_id = ChatId(message.target.chat_id);
+    let trace_id = message.trace_id;
 
     match message.message_type {
         OutgoingMessageType::TextMessage(data) => {
@@ -88,7 +109,7 @@ async fn handle_outgoing_message(
                     msg_to_send = msg_to_send.reply_markup(reply_keyboard);
                 }
 
-                try_send_with_fallback(
+                let sent = try_send_with_fallback(
                     msg_to_send.await,
                     || async {
                         let mut plain_msg = bot.send_message(chat_id, &data.text);
@@ -103,6 +124,7 @@ async fn handle_outgoing_message(
                     "text message",
                 )
                 .await?;
+                report_message_sent(broker, trace_id, chat_id.0, sent.id.0).await;
             } else {
                 // No parse mode, send as plain text
                 let mut msg_to_send = bot.send_message(chat_id, &data.text);
@@ -112,7 +134,8 @@ async fn handle_outgoing_message(
                 if let Some(reply_keyboard) = create_reply_keyboard(&data.reply_keyboard) {
                     msg_to_send = msg_to_send.reply_markup(reply_keyboard);
                 }
-                msg_to_send.await?;
+                let sent = msg_to_send.await?;
+                report_message_sent(broker, trace_id, chat_id.0, sent.id.0).await;
             }
         }
 
@@ -492,7 +515,7 @@ pub async fn start_broker_consumer_loop(bot_consumer_clone: Bot, broker: Arc<dyn
                     message_type = ?std::mem::discriminant(&out_msg.message_type)
                 );
 
-                if let Err(e) = handle_outgoing_message(&bot_consumer_clone, out_msg)
+                if let Err(e) = handle_outgoing_message(&bot_consumer_clone, &broker, out_msg)
                     .instrument(span)
                     .await
                 {

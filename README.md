@@ -257,6 +257,30 @@ All messages from Telegram are wrapped in the unified `IncomingMessage` type:
 }
 ```
 
+#### Message Sent Example
+Confirms an `OutgoingMessage` was actually delivered, carrying the real Telegram `message_id` it
+was sent as. Note `trace_id` here is the *outgoing* message's own trace_id, not a freshly generated
+one - that's what lets a producer correlate this back to whichever message it published. Currently
+only emitted for `TextMessage` sends.
+```json
+{
+  "trace_id": "the outgoing message's own trace_id, not a new one",
+  "message_type": {
+    "type": "MessageSent",
+    "data": {
+      "chat_id": -1001234567890,
+      "message_id": 456
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "source": {
+    "platform": "telegram",
+    "bot_id": null,
+    "bot_username": null
+  }
+}
+```
+
 ### Outgoing messages read from the `{prefix}.out` Kafka topic
 
 All messages to Telegram use the unified `OutgoingMessage` type:

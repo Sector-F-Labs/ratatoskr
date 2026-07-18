@@ -5,7 +5,7 @@ This document describes the unified message type system implemented in Ratatoskr
 ## Overview
 
 Ratatoskr uses a single unified type system for all Kafka messages:
-- **`IncomingMessage`** - All messages sent TO Kafka (from Telegram to your application), published to the `{prefix}.in` topic
+- **`IncomingMessage`** - All messages sent TO Kafka (from Telegram to your application, plus delivery confirmations for messages your application sent - see `MessageSent`), published to the `{prefix}.in` topic
 - **`OutgoingMessage`** - All messages sent FROM Kafka (from your application to Telegram), consumed from the `{prefix}.out` topic
 
 `{prefix}` defaults to `ratatoskr` and is configurable via the `KAFKA_TOPIC_PREFIX` environment variable.
@@ -133,6 +133,34 @@ A previously sent message that the user edited
       "message": { /* Full Telegram Message object, with updated content */ },
       "file_attachments": [],
       "edit_date": 1678901300
+    }
+  },
+  "timestamp": "2023-12-01T10:30:00Z",
+  "source": {
+    "platform": "telegram",
+    "bot_id": null,
+    "bot_username": null
+  }
+}
+```
+
+#### 5. MessageSent
+Confirms an `OutgoingMessage` was actually delivered, carrying the real Telegram `message_id` it
+was sent as - producers of `OutgoingMessage` never otherwise learn that id, since sending happens
+entirely on ratatoskr's side. Delivered on the IN topic rather than a separate one, since it flows
+in the same direction (ratatoskr -> consumer) as everything else there. Unlike the other incoming
+types, the envelope's `trace_id` here is the *outgoing* message's own `trace_id` (not freshly
+generated), so a producer can correlate this back to whichever message it published. Currently only
+emitted for `TextMessage` sends - not the other `OutgoingMessageType` variants.
+
+```json
+{
+  "trace_id": "the outgoing message's own trace_id, not a new one",
+  "message_type": {
+    "type": "MessageSent",
+    "data": {
+      "chat_id": -1001234567890,
+      "message_id": 456
     }
   },
   "timestamp": "2023-12-01T10:30:00Z",
@@ -391,6 +419,11 @@ match incoming_message.message_type {
     }
     IncomingMessageType::EditedMessage(data) => {
         // Handle an edited message
+    }
+    IncomingMessageType::MessageSent(data) => {
+        // Correlate incoming_message.trace_id back to the OutgoingMessage
+        // you published with the same trace_id, and record data.message_id
+        // as the real Telegram id it was sent as.
     }
 }
 ```
