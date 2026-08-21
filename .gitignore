@@ -24,3 +24,6 @@ files/
 # already existing elements were commented out
 
 *.DS_Store
+
+# Ignore dev environment specifics
+.claude/
