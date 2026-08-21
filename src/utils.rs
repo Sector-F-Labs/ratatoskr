@@ -394,7 +394,7 @@ pub async fn get_file_info(
     metadata: FileMetadata,
 ) -> Result<FileInfo, Box<dyn Error + Send + Sync>> {
     // Get file info from Telegram
-    let telegram_file = bot.get_file(&file.id).await?;
+    let telegram_file = bot.get_file(file.id.clone()).await?;
     let file_path = &telegram_file.path;
 
     // Generate the Telegram file URL
@@ -413,8 +413,8 @@ pub async fn get_file_info(
     );
 
     Ok(FileInfo {
-        file_id: file.id.clone(),
-        file_unique_id: file.unique_id.clone(),
+        file_id: file.id.to_string(),
+        file_unique_id: file.unique_id.to_string(),
         file_type,
         file_size: file.size,
         file_url: telegram_file_url, // Using telegram URL instead of local path

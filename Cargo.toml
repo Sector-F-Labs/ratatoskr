@@ -13,7 +13,7 @@ keywords = ["telegram", "bot", "bridge", "pipe", "messaging"]
 categories = ["command-line-utilities", "network-programming"]
 
 [dependencies]
-teloxide = { version = "0.15", features = ["macros"] }
+teloxide = { version = "0.17", features = ["macros"] }
 tokio = { version = "1.45", features = ["full"] }
 async-trait = "0.1"
 dotenv = "0.15"

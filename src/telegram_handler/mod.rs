@@ -434,7 +434,7 @@ pub async fn callback_query_handler(
         user_id,
         message_id.unwrap_or(0),
         data.to_string(),
-        query_id.clone(),
+        query_id.to_string(),
         None, // bot_id - could be retrieved from bot.get_me() if needed
         None, // bot_username - could be retrieved from bot.get_me() if needed
     );
