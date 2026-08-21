@@ -762,19 +762,28 @@ mod tests {
         let config = UsersConfig {
             users: vec![make_entry("alice", Some(tg_id))],
         };
-        Arc::new(RwLock::new(AuthService::new(config, PathBuf::from("/tmp/test.toml"))))
+        Arc::new(RwLock::new(AuthService::new(
+            config,
+            PathBuf::from("/tmp/test.toml"),
+        )))
     }
 
     fn auth_denying_everyone() -> Arc<RwLock<AuthService>> {
         let config = UsersConfig {
             users: vec![make_entry("alice", Some(1))],
         };
-        Arc::new(RwLock::new(AuthService::new(config, PathBuf::from("/tmp/test.toml"))))
+        Arc::new(RwLock::new(AuthService::new(
+            config,
+            PathBuf::from("/tmp/test.toml"),
+        )))
     }
 
     fn auth_open() -> Arc<RwLock<AuthService>> {
         let config = UsersConfig { users: vec![] };
-        Arc::new(RwLock::new(AuthService::new(config, PathBuf::from("/tmp/test.toml"))))
+        Arc::new(RwLock::new(AuthService::new(
+            config,
+            PathBuf::from("/tmp/test.toml"),
+        )))
     }
 
     fn mock_broker() -> Arc<MockMessageBroker> {

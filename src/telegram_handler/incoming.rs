@@ -260,7 +260,10 @@ impl IncomingMessage {
     pub fn new_message_sent(trace_id: Uuid, chat_id: i64, message_id: i32) -> Self {
         Self {
             trace_id,
-            message_type: IncomingMessageType::MessageSent(MessageSentData { chat_id, message_id }),
+            message_type: IncomingMessageType::MessageSent(MessageSentData {
+                chat_id,
+                message_id,
+            }),
             timestamp: Utc::now(),
             source: MessageSource {
                 platform: "telegram".to_string(),

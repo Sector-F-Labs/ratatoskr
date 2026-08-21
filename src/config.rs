@@ -33,8 +33,7 @@ impl UsersConfig {
         }
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
-        toml::from_str(&content)
-            .with_context(|| format!("Failed to parse {}", path.display()))
+        toml::from_str(&content).with_context(|| format!("Failed to parse {}", path.display()))
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
@@ -42,10 +41,8 @@ impl UsersConfig {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create directory {}", parent.display()))?;
         }
-        let content = toml::to_string_pretty(self)
-            .context("Failed to serialize users config")?;
-        std::fs::write(path, content)
-            .with_context(|| format!("Failed to write {}", path.display()))
+        let content = toml::to_string_pretty(self).context("Failed to serialize users config")?;
+        std::fs::write(path, content).with_context(|| format!("Failed to write {}", path.display()))
     }
 }
 

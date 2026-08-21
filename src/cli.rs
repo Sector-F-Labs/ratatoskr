@@ -51,14 +51,8 @@ mod tests {
 
     #[test]
     fn parse_send_allows_negative_chat_id() {
-        let cli = Cli::try_parse_from([
-            "ratatoskr",
-            "send",
-            "--chat-id",
-            "-123456789",
-            "hello",
-        ])
-        .expect("expected negative chat_id to parse");
+        let cli = Cli::try_parse_from(["ratatoskr", "send", "--chat-id", "-123456789", "hello"])
+            .expect("expected negative chat_id to parse");
 
         match cli.command {
             super::Command::Send { chat_id, .. } => {

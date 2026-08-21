@@ -150,11 +150,7 @@ fn run_send(chat_id: i64, parse_mode: Option<&str>, thread_id: Option<i32>, mess
 
     let key = chat_id.to_string();
     producer
-        .send(
-            BaseRecord::to(&topic)
-                .key(&key)
-                .payload(json.as_bytes()),
-        )
+        .send(BaseRecord::to(&topic).key(&key).payload(json.as_bytes()))
         .unwrap_or_else(|(e, _)| {
             eprintln!("Error: failed to send to Kafka: {e}");
             std::process::exit(1);
@@ -402,8 +398,7 @@ async fn run_serve(cli: &Cli) {
 
     let telegram_token =
         env::var("TELEGRAM_BOT_TOKEN").expect("FATAL: TELEGRAM_BOT_TOKEN not set in environment");
-    let kafka_brokers =
-        env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
+    let kafka_brokers = env::var("KAFKA_BROKERS").unwrap_or_else(|_| "localhost:9092".to_string());
     let kafka_topic_prefix = env::var("KAFKA_TOPIC_PREFIX").ok();
 
     let bot = Bot::new(telegram_token.clone());
@@ -413,12 +408,8 @@ async fn run_serve(cli: &Cli) {
         topic_prefix = ?kafka_topic_prefix,
         "Using Kafka broker"
     );
-    let kafka_broker = KafkaBroker::new(
-        &kafka_brokers,
-        kafka_topic_prefix.as_deref(),
-        None,
-    )
-    .expect("Failed to create Kafka broker");
+    let kafka_broker = KafkaBroker::new(&kafka_brokers, kafka_topic_prefix.as_deref(), None)
+        .expect("Failed to create Kafka broker");
 
     // Ensure topics exist
     kafka_broker

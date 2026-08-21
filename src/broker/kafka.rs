@@ -1,17 +1,17 @@
 use crate::broker::{BoxStream, MessageBroker};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use rdkafka::Message;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::message::OwnedHeaders;
 use rdkafka::producer::{FutureProducer, FutureRecord};
-use rdkafka::Message;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 
 /// KafkaBroker implements MessageBroker using Apache Kafka.
 /// - Publishes incoming Telegram messages to `{prefix}.in` topic

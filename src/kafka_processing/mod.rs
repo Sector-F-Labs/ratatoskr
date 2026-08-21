@@ -22,7 +22,12 @@ use uuid::Uuid;
 /// it was actually sent as - not otherwise knowable, since sending happens
 /// entirely on this side. Not fatal if this fails: the message itself was
 /// already delivered successfully, only the confirmation is lost.
-async fn report_message_sent(broker: &Arc<dyn MessageBroker>, trace_id: Uuid, chat_id: i64, message_id: i32) {
+async fn report_message_sent(
+    broker: &Arc<dyn MessageBroker>,
+    trace_id: Uuid,
+    chat_id: i64,
+    message_id: i32,
+) {
     let incoming = IncomingMessage::new_message_sent(trace_id, chat_id, message_id);
     match serde_json::to_string(&incoming) {
         Ok(json) => {
@@ -30,7 +35,9 @@ async fn report_message_sent(broker: &Arc<dyn MessageBroker>, trace_id: Uuid, ch
                 tracing::warn!(%trace_id, error = %e, "failed to publish MessageSent confirmation");
             }
         }
-        Err(e) => tracing::warn!(%trace_id, error = %e, "failed to serialize MessageSent confirmation"),
+        Err(e) => {
+            tracing::warn!(%trace_id, error = %e, "failed to serialize MessageSent confirmation")
+        }
     }
 }
 
@@ -759,7 +766,11 @@ mod tests {
         let _ = handle_outgoing_message(&bot, &broker, msg).await;
 
         let requests = server.received_requests().await.unwrap();
-        assert_eq!(requests.len(), 2, "expected a formatted attempt plus a plain-text fallback");
+        assert_eq!(
+            requests.len(),
+            2,
+            "expected a formatted attempt plus a plain-text fallback"
+        );
 
         let first: serde_json::Value = requests[0].body_json().unwrap();
         assert_eq!(first["parse_mode"], "HTML");

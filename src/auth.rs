@@ -124,9 +124,7 @@ mod tests {
     fn check_disabled_user_rejected() {
         let mut entry = make_entry("carol", Some(222), false, vec![]);
         entry.enabled = false;
-        let config = UsersConfig {
-            users: vec![entry],
-        };
+        let config = UsersConfig { users: vec![entry] };
         let svc = AuthService::new(config, PathBuf::from("/tmp/test.toml"));
         assert!(svc.check(222, None).is_none());
     }
