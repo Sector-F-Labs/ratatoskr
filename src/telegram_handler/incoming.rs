@@ -270,3 +270,156 @@ impl IncomingMessage {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn new_callback_query_wires_fields_and_generates_trace_id() {
+        let msg = IncomingMessage::new_callback_query(
+            42,
+            7,
+            99,
+            "payload".to_string(),
+            "query-id".to_string(),
+            Some(1),
+            Some("mybot".to_string()),
+        );
+
+        assert!(!msg.trace_id.is_nil());
+        assert_eq!(msg.source.platform, "telegram");
+        assert_eq!(msg.source.bot_id, Some(1));
+        assert_eq!(msg.source.bot_username.as_deref(), Some("mybot"));
+        match msg.message_type {
+            IncomingMessageType::CallbackQuery(data) => {
+                assert_eq!(data.chat_id, 42);
+                assert_eq!(data.user_id, 7);
+                assert_eq!(data.message_id, 99);
+                assert_eq!(data.callback_data, "payload");
+                assert_eq!(data.callback_query_id, "query-id");
+            }
+            other => panic!("expected CallbackQuery, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn new_message_reaction_wires_fields() {
+        let now = Utc::now();
+        let msg = IncomingMessage::new_message_reaction(
+            1,
+            2,
+            Some(3),
+            now,
+            vec!["👍".to_string()],
+            vec!["🔥".to_string()],
+            None,
+            None,
+        );
+
+        match msg.message_type {
+            IncomingMessageType::MessageReaction(data) => {
+                assert_eq!(data.chat_id, 1);
+                assert_eq!(data.message_id, 2);
+                assert_eq!(data.user_id, Some(3));
+                assert_eq!(data.date, now);
+                assert_eq!(data.old_reaction, vec!["👍".to_string()]);
+                assert_eq!(data.new_reaction, vec!["🔥".to_string()]);
+            }
+            other => panic!("expected MessageReaction, got {other:?}"),
+        }
+    }
+
+    /// `new_message_sent` is the one constructor that takes `trace_id` as a
+    /// parameter rather than generating a fresh one - it must correlate back
+    /// to the outgoing message's own trace_id.
+    #[test]
+    fn new_message_sent_preserves_given_trace_id() {
+        let trace_id = Uuid::new_v4();
+        let msg = IncomingMessage::new_message_sent(trace_id, 555, 123);
+
+        assert_eq!(msg.trace_id, trace_id);
+        match msg.message_type {
+            IncomingMessageType::MessageSent(data) => {
+                assert_eq!(data.chat_id, 555);
+                assert_eq!(data.message_id, 123);
+            }
+            other => panic!("expected MessageSent, got {other:?}"),
+        }
+    }
+
+    /// Downstream Kafka consumers depend on the `{"type": ..., "data": ...}`
+    /// tagging shape - this asserts it survives a serialize/deserialize round
+    /// trip for every variant.
+    #[test]
+    fn message_type_serde_round_trip_preserves_tag_shape() {
+        let cases: Vec<(&str, IncomingMessage)> = vec![
+            (
+                "CallbackQuery",
+                IncomingMessage::new_callback_query(
+                    1,
+                    2,
+                    3,
+                    "data".to_string(),
+                    "qid".to_string(),
+                    None,
+                    None,
+                ),
+            ),
+            (
+                "MessageReaction",
+                IncomingMessage::new_message_reaction(
+                    1,
+                    2,
+                    None,
+                    Utc::now(),
+                    vec![],
+                    vec![],
+                    None,
+                    None,
+                ),
+            ),
+            (
+                "MessageSent",
+                IncomingMessage::new_message_sent(Uuid::new_v4(), 1, 2),
+            ),
+        ];
+
+        for (tag, original) in cases {
+            let value = serde_json::to_value(&original).unwrap();
+            assert_eq!(
+                value["message_type"]["type"], tag,
+                "unexpected tag for {tag}"
+            );
+            assert!(
+                value["message_type"]["data"].is_object(),
+                "missing data object for {tag}"
+            );
+
+            let round_tripped: IncomingMessage = serde_json::from_value(value).unwrap();
+            assert_eq!(round_tripped.trace_id, original.trace_id);
+        }
+    }
+
+    #[test]
+    fn file_metadata_variants_serialize_with_expected_fields() {
+        let photo = FileMetadata::Photo {
+            width: 100,
+            height: 200,
+        };
+        assert_eq!(
+            serde_json::to_value(&photo).unwrap(),
+            json!({ "Photo": { "width": 100, "height": 200 } })
+        );
+
+        let doc = FileMetadata::Document {
+            file_name: Some("report.pdf".to_string()),
+            mime_type: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&doc).unwrap(),
+            json!({ "Document": { "file_name": "report.pdf", "mime_type": null } })
+        );
+    }
+}

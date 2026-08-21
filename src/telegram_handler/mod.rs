@@ -735,3 +735,257 @@ pub async fn edited_message_handler(
     Ok(())
     }.instrument(span).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::broker::test_support::MockMessageBroker;
+    use crate::config::{UserEntry, UsersConfig};
+    use std::path::PathBuf;
+    use teloxide::types::{CallbackQuery, MessageReactionUpdated};
+    use wiremock::matchers::{method, path_regex};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn make_entry(system_user: &str, tg_id: Option<u64>) -> UserEntry {
+        UserEntry {
+            system_user: system_user.to_string(),
+            enabled: true,
+            telegram_user_id: tg_id,
+            promote_on_first_auth: false,
+            allowed_usernames: vec![],
+            first_seen_at: None,
+            last_seen_at: None,
+        }
+    }
+
+    fn auth_allowing(tg_id: u64) -> Arc<RwLock<AuthService>> {
+        let config = UsersConfig {
+            users: vec![make_entry("alice", Some(tg_id))],
+        };
+        Arc::new(RwLock::new(AuthService::new(config, PathBuf::from("/tmp/test.toml"))))
+    }
+
+    fn auth_denying_everyone() -> Arc<RwLock<AuthService>> {
+        let config = UsersConfig {
+            users: vec![make_entry("alice", Some(1))],
+        };
+        Arc::new(RwLock::new(AuthService::new(config, PathBuf::from("/tmp/test.toml"))))
+    }
+
+    fn auth_open() -> Arc<RwLock<AuthService>> {
+        let config = UsersConfig { users: vec![] };
+        Arc::new(RwLock::new(AuthService::new(config, PathBuf::from("/tmp/test.toml"))))
+    }
+
+    fn mock_broker() -> Arc<MockMessageBroker> {
+        Arc::new(MockMessageBroker::new())
+    }
+
+    fn test_bot(api_url: &str) -> Bot {
+        Bot::new("test_token").set_api_url(reqwest::Url::parse(api_url).unwrap())
+    }
+
+    /// A plain-text message from user 555, with no file attachments - so
+    /// `message_handler`/`edited_message_handler` never call `get_file_info`
+    /// and this fixture never needs a live/mocked `Bot`.
+    fn text_message_json(from_id: u64) -> serde_json::Value {
+        serde_json::json!({
+            "message_id": 100,
+            "from": {
+                "id": from_id,
+                "is_bot": false,
+                "first_name": "Alice",
+                "username": "alice"
+            },
+            "chat": {
+                "id": from_id,
+                "first_name": "Alice",
+                "username": "alice",
+                "type": "private"
+            },
+            "date": 1_700_000_000,
+            "text": "hello world"
+        })
+    }
+
+    fn text_message(from_id: u64) -> Message {
+        serde_json::from_value(text_message_json(from_id)).unwrap()
+    }
+
+    // --- message_reaction_handler: `_bot` is unused, so no network involved ---
+
+    fn reaction_updated() -> MessageReactionUpdated {
+        let json = serde_json::json!({
+            "chat": { "id": -1002184233434i64, "title": "Test", "type": "supergroup" },
+            "message_id": 35,
+            "user": {
+                "id": 1459074222u64,
+                "is_bot": false,
+                "first_name": "shadowchain",
+                "username": "shdwchn10"
+            },
+            "date": 1_721_306_082,
+            "old_reaction": [],
+            "new_reaction": [{ "type": "emoji", "emoji": "🌭" }]
+        });
+        serde_json::from_value(json).unwrap()
+    }
+
+    #[tokio::test]
+    async fn message_reaction_handler_publishes_when_authorized() {
+        let broker = mock_broker();
+        let auth = auth_allowing(1459074222);
+        let bot = Bot::new("unused");
+
+        let result = message_reaction_handler(bot, reaction_updated(), broker.clone(), auth).await;
+        assert!(result.is_ok());
+
+        let published = broker.published();
+        assert_eq!(published.len(), 1);
+
+        let incoming: incoming::IncomingMessage = serde_json::from_slice(&published[0].1).unwrap();
+        match incoming.message_type {
+            incoming::IncomingMessageType::MessageReaction(data) => {
+                assert_eq!(data.chat_id, -1002184233434);
+                assert_eq!(data.message_id, 35);
+                assert_eq!(data.new_reaction, vec!["🌭".to_string()]);
+            }
+            other => panic!("expected MessageReaction, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn message_reaction_handler_drops_unauthorized_reaction() {
+        let broker = mock_broker();
+        let auth = auth_denying_everyone();
+        let bot = Bot::new("unused");
+
+        let result = message_reaction_handler(bot, reaction_updated(), broker.clone(), auth).await;
+        assert!(result.is_ok());
+
+        assert!(broker.published().is_empty());
+    }
+
+    // --- message_handler / edited_message_handler: text-only fixture, no network ---
+
+    #[tokio::test]
+    async fn message_handler_publishes_authorized_text_message() {
+        let broker = mock_broker();
+        let auth = auth_allowing(777);
+        let bot = Bot::new("unused");
+
+        let result = message_handler(bot, text_message(777), broker.clone(), auth).await;
+        assert!(result.is_ok());
+
+        let published = broker.published();
+        assert_eq!(published.len(), 1);
+        assert_eq!(published[0].0.as_deref(), Some("777"));
+
+        let incoming: incoming::IncomingMessage = serde_json::from_slice(&published[0].1).unwrap();
+        match incoming.message_type {
+            incoming::IncomingMessageType::TelegramMessage(data) => {
+                assert_eq!(data.message.text(), Some("hello world"));
+                assert!(data.file_attachments.is_empty());
+            }
+            other => panic!("expected TelegramMessage, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn message_handler_drops_unauthorized_text_message() {
+        let broker = mock_broker();
+        let auth = auth_denying_everyone();
+        let bot = Bot::new("unused");
+
+        let result = message_handler(bot, text_message(999), broker.clone(), auth).await;
+        assert!(result.is_ok());
+
+        assert!(broker.published().is_empty());
+    }
+
+    #[tokio::test]
+    async fn message_handler_publishes_when_no_users_configured() {
+        let broker = mock_broker();
+        let auth = auth_open();
+        let bot = Bot::new("unused");
+
+        let result = message_handler(bot, text_message(123), broker.clone(), auth).await;
+        assert!(result.is_ok());
+
+        assert_eq!(broker.published().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn edited_message_handler_publishes_authorized_edit() {
+        let broker = mock_broker();
+        let auth = auth_allowing(777);
+        let bot = Bot::new("unused");
+
+        let result = edited_message_handler(bot, text_message(777), broker.clone(), auth).await;
+        assert!(result.is_ok());
+
+        assert_eq!(broker.published().len(), 1);
+    }
+
+    // --- callback_query_handler: unconditionally calls bot.answer_callback_query ---
+
+    fn callback_query(user_id: u64) -> CallbackQuery {
+        let json = serde_json::json!({
+            "id": "query-id",
+            "from": { "id": user_id, "is_bot": false, "first_name": "Alice", "username": "alice" },
+            "message": text_message_json(user_id),
+            "chat_instance": "instance",
+            "data": "button:clicked"
+        });
+        serde_json::from_value(json).unwrap()
+    }
+
+    #[tokio::test]
+    async fn callback_query_handler_answers_and_publishes_when_authorized() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path_regex(r"(?i)^/bot[^/]+/answerCallbackQuery$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "ok": true, "result": true
+            })))
+            .mount(&server)
+            .await;
+
+        let broker = mock_broker();
+        let auth = auth_allowing(777);
+        let bot = test_bot(&server.uri());
+
+        let result = callback_query_handler(bot, callback_query(777), broker.clone(), auth).await;
+        assert!(result.is_ok());
+
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+
+        let published = broker.published();
+        assert_eq!(published.len(), 1);
+
+        let incoming: incoming::IncomingMessage = serde_json::from_slice(&published[0].1).unwrap();
+        match incoming.message_type {
+            incoming::IncomingMessageType::CallbackQuery(data) => {
+                assert_eq!(data.callback_data, "button:clicked");
+                assert_eq!(data.chat_id, 777);
+            }
+            other => panic!("expected CallbackQuery, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn callback_query_handler_denies_before_calling_bot() {
+        // The auth gate runs before `bot.answer_callback_query`, so a denied
+        // caller never needs a reachable Bot API - this points at an
+        // unreachable address to prove that.
+        let broker = mock_broker();
+        let auth = auth_denying_everyone();
+        let bot = test_bot("http://127.0.0.1:1");
+
+        let result = callback_query_handler(bot, callback_query(999), broker.clone(), auth).await;
+        assert!(result.is_ok());
+
+        assert!(broker.published().is_empty());
+    }
+}
