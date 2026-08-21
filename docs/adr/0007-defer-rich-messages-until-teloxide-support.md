@@ -61,3 +61,19 @@ fix whatever the compiler flags, verify against the test suite.
 - This decision is coupled to a dependency we don't control; teloxide's release cadence is the
   trigger for revisiting it, not a date. If teloxide's pace on this turns out to be slow enough
   to matter, the raw-HTTP-bypass option above is the fallback, not a dead end.
+
+## Update, 2026-08-21
+
+The Context section's claim that no open teloxide PR touches Rich Messages was already stale the
+day it was written — [teloxide/teloxide#1480](https://github.com/teloxide/teloxide/pull/1480)
+("Add rich text formatting support for articles") was opened 2026-08-14, a week before this ADR,
+and our research simply didn't surface it. Left uncorrected above per this repo's ADR convention
+(a point-in-time record isn't silently rewritten); noting the actual state here instead.
+
+The PR adds `SendRichMessage`/`InputRichMessage` to `teloxide-core`, codegen'd from Telegram's own
+API schema (`chat_id` + `rich_message: InputRichMessage`, plus the standard optional params) — it
+is the real thing, not a stub. As of this update it's open, mergeable, labeled
+`S-waiting-on-review`, with no reviews yet. It does **not** include `sendRichMessageDraft`
+(streaming) — only the non-streaming `sendRichMessage` and the `rich_message` param groundwork.
+The decision above is unchanged: still waiting on a released teloxide version, now with a concrete
+PR to watch instead of an unstarted gap.
