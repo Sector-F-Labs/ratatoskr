@@ -782,7 +782,7 @@ mod tests {
     }
 
     fn test_bot(api_url: &str) -> Bot {
-        Bot::new("test_token").set_api_url(reqwest::Url::parse(api_url).unwrap())
+        Bot::new("test_token").set_api_url(url::Url::parse(api_url).unwrap())
     }
 
     /// A plain-text message from user 555, with no file attachments - so
