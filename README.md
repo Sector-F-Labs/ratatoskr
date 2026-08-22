@@ -6,7 +6,7 @@ A Telegram <-> Kafka bridge written in **Rust**. It streams inbound Telegram upd
 
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue.svg)](https://github.com/sector-f-labs/ratatoskr)
 
-## 🚀 Features
+## Features
 
 * Uses [`teloxide`](https://github.com/teloxide/teloxide) for Telegram bot integration
 * Publishes inbound Telegram updates as JSON to the `{prefix}.in` Kafka topic
@@ -15,13 +15,13 @@ A Telegram <-> Kafka bridge written in **Rust**. It streams inbound Telegram upd
 * Optional per-user auth (`users.toml`) that gates which Telegram users/IDs may talk to the bot
 * CLI with `serve`, `users` (add/remove/list), and `send` (publish a message straight to Kafka) subcommands
 
-## 📦 Prerequisites
+## Prerequisites
 
 * [Rust](https://www.rust-lang.org/tools/install)
 * A Telegram bot token from [@BotFather](https://t.me/BotFather)
 * A running Kafka broker (a `docker-compose.yml` with Kafka, Zookeeper, and an AKHQ UI is provided)
 
-## ⚙️ Setup
+## Setup
 
 1. **Clone the repository:**
 
@@ -69,7 +69,7 @@ A Telegram <-> Kafka bridge written in **Rust**. It streams inbound Telegram upd
    cargo run --release -- serve
    ```
 
-## 🔄 Development
+## Development
 
 For development with auto-reload:
 
@@ -100,7 +100,7 @@ ratatoskr send --chat-id <id> [--parse-mode HTML|Markdown] [--thread-id <id>] <m
 
 With Kafka running, `scripts/produce.sh` and `scripts/consume.sh` are convenience wrappers around `kafka-console-producer`/`kafka-console-consumer` for manually publishing/reading messages on the topics (see `scripts/setup_env.sh` for the env vars they expect).
 
-### 🦾 Cross-compiling for ARM (e.g. Raspberry Pi)
+### Cross-compiling for ARM (e.g. Raspberry Pi)
 
 You can build an ARM binary on an x86 machine and copy it over, without compiling on the target device. This uses [`cross`](https://github.com/cross-rs/cross), which runs the build inside a Docker container with the right toolchain.
 
@@ -140,11 +140,11 @@ You can build an ARM binary on an x86 machine and copy it over, without compilin
 
 ----
 
-## 📤 Unified Message Types
+## Unified Message Types
 
 Ratatoskr uses a unified message type system for consistent handling of all communications. For detailed documentation, see [Unified Message Types](docs/unified_message_types.md).
 
-### 🔧 Client Type Generation
+### Client Type Generation
 
 Ratatoskr provides TypeScript definitions that can be used with [quicktype](https://quicktype.io/) to generate client types in your preferred programming language:
 
@@ -372,11 +372,11 @@ For complete documentation, see [Unified Message Types](docs/unified_message_typ
 For practical examples and usage patterns, see [Examples](docs/examples.md).
 For troubleshooting common issues, see [Troubleshooting Guide](docs/troubleshooting.md).
 
-## 🧠 Why Ratatoskr?
+## Why Ratatoskr?
 
 Inspired by the mythical squirrel that relays messages across realms, Ratatoskr is built to relay messages between users and intelligent systems, using simple pipe-based messaging as the backbone.
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -386,6 +386,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📃 License
+## License
 
 This project is licensed under the BSD 3-Clause License - see the LICENSE.md file for details.
