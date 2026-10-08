@@ -2,7 +2,7 @@ name: Rust CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "develop"]
   pull_request:
     branches: ["main"]
 
@@ -32,3 +32,33 @@ jobs:
 
       - name: Build release
         run: cargo build --release
+
+  freebsd:
+    name: Test (FreeBSD)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner has KVM, but only root can use it by default.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils
+
+      - name: Install bsdt
+        run: cargo install bsdt --locked
+
+      # Boots the FreeBSD VM described in bsdt.toml and runs cargo test in it.
+      - name: Run tests on FreeBSD
+        run: make freebsd-test
+
+      - name: FreeBSD console log
+        if: failure()
+        run: bsdt logs || true
