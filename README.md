@@ -84,6 +84,20 @@ To run tests:
 cargo test
 ```
 
+### Testing on FreeBSD
+
+CI runs on Linux. To build and test on FreeBSD from Linux or macOS, the
+repository has a `bsdt.toml` for [bsdt](https://bsdt.divanv.com), which boots a
+FreeBSD VM in QEMU and runs commands in it against your checkout:
+
+```sh
+cargo install bsdt     # once; it also needs QEMU, see bsdt.divanv.com
+make freebsd-test      # boot the VM (the first run sets it up) and run cargo test in it
+make freebsd-down      # shut it down; `bsdt destroy` deletes it
+```
+
+`bsdt ssh` opens a shell in the VM, in the synced checkout.
+
 ### CLI commands
 
 ```sh

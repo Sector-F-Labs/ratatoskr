@@ -1,0 +1,15 @@
+# FreeBSD development VM for ratatoskr; see https://bsdt.divanv.com
+# `make freebsd-test` boots it and runs the tests on FreeBSD.
+
+[vm]
+os = "freebsd"
+version = "15.1"
+cpus = 4
+memory = "4G"
+
+[packages]
+# perl5 and gmake build the vendored OpenSSL; librdkafka's configure needs bash.
+install = ["rust", "perl5", "gmake", "bash"]
+
+[sync]
+exclude = ["/target", "/images", "/files", ".envrc", ".env"]
